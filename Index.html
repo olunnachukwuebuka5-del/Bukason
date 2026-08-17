@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BUKASON AI</title>
+
+  <style>
+    /.menu-toggle {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: 10px;
+  background: rgba(255,255,255,.08);
+  cursor: pointer;
+  z-index: 20;
+}
+
+.menu-toggle span {
+  display: block;
+  width: 20px;
+  height: 2px;
+  margin: 4px auto;
+  background: #fff;
+  border-radius: 5px;
+}
+
+.side-menu {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: 270px;
+  padding: 24px 16px;
+  background: var(--navy-deep);
+  color: #fff;
+  transform: translateX(-105%);
+  transition: transform .25s ease;
+  z-index: 100;
+  box-shadow: 8px 0 28px rgba(0,0,0,.25);
+}
+
+.side-menu.open {
+  transform: translateX(0);
+}
+
+.menu-title {
+  margin: 8px 12px 24px;
+  color: var(--gold);
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.menu-item {
+  display: block;
+  width: 100%;
+  margin: 5px 0;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #e8edf7;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-item:hover,
+.menu-item.active {
+  background: rgba(255,255,255,.12);
+}
+
+.menu-item.danger {
+  color: #ffb4a8;
+}
+
+.menu-divider {
+  height: 1px;
+  margin: 16px 8px;
+  background: rgba(255,255,255,.14);
+}
+
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  display: none;
+  background: rgba(5,13,28,.55);
+  z-index: 90;
+}
+
+.menu-backdrop.open {
+  display: block;
+}
+
+.history-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(390px, 92vw);
+  padding: 20px;
+  background: var(--paper);
+  transform: translateX(105%);
+  transition: transform .25s ease;
+  z-index: 110;
+  box-shadow: -8px 0 28px rgba(0,0,0,.2);
+  overflow-y: auto;
+}
+
+.history-panel.open {
+  transform: translateX(0);
+}
+
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 12px;
+}
+
+.history-header h2 {
+  margin: 0;
+  font-family: "Space Grotesk", sans-serif;
+}
+
+.history-header button {
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 28px;
+  cursor: pointer;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.history-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.history-item-title {
+  overflow: hidden;
+  color: var(--ink);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-item-meta {
+  margin-top: 4px;
+  color: var(--sub);
+  font-size: 11px;
+}
+
+.history-delete {
+  border: 0;
+  background: transparent;
+  color: #b3261e;
+  cursor: pointer;
+}/
+  </style>
+</head>
+
+<body>
+  <!-- <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+  <span></span>
+  <span></span>
+  <span></span>
+</button>
+
+<aside class="side-menu" id="sideMenu">
+  <div class="menu-title">BUKASON</div>
+
+  <button class="menu-item" id="newChatBtn">＋ New chat</button>
+  <button class="menu-item" id="historyBtn">◷ History</button>
+
+  <div class="menu-divider"></div>
+
+  <button class="menu-item category-btn" data-mode="academics">
+    🎓 Academics
+  </button>
+  <button class="menu-item category-btn" data-mode="business">
+    💼 Business
+  </button>
+  <button class="menu-item category-btn" data-mode="general">
+    💬 General
+  </button>
+
+  <div class="menu-divider"></div>
+
+  <button class="menu-item danger" id="clearChatBtn">
+    🗑 Clear current chat
+  </button>
+</aside>
+
+<div class="menu-backdrop" id="menuBackdrop"></div>
+
+<section class="history-panel" id="historyPanel">
+  <div class="history-header">
+    <h2>Chat history</h2>
+    <button id="closeHistoryBtn" aria-label="Close history">×</button>
+  </div>
+  <div id="historyList"></div>
+</section> -->
+
+  <script>
+    /const menuToggle = document.getElementById("menuToggle");
+const sideMenu = document.getElementById("sideMenu");
+const menuBackdrop = document.getElementById("menuBackdrop");
+const historyPanel = document.getElementById("historyPanel");
+const historyList = document.getElementById("historyList");
+const historyBtn = document.getElementById("historyBtn");
+const closeHistoryBtn = document.getElementById("closeHistoryBtn");
+const newChatBtn = document.getElementById("newChatBtn");
+const clearChatBtn = document.getElementById("clearChatBtn");
+
+const HISTORY_KEY = "bukason_chat_history";
+let currentConversationId =
+  localStorage.getItem("bukason_current_conversation") ||
+  crypto.randomUUID();
+
+function getHistory() {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function saveHistory(history) {
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+}
+
+function closeMenu() {
+  sideMenu.classList.remove("open");
+  menuBackdrop.classList.remove("open");
+}
+
+function openMenu() {
+  sideMenu.classList.add("open");
+  menuBackdrop.classList.add("open");
+}
+
+function closeHistory() {
+  historyPanel.classList.remove("open");
+}
+
+function openHistory() {
+  closeMenu();
+  renderHistory();
+  historyPanel.classList.add("open");
+}
+
+function currentMessages() {
+  if (typeof messages !== "undefined") return messages;
+  if (typeof chatMessages !== "undefined") return chatMessages;
+  return [];
+}
+
+function saveCurrentConversation() {
+  const items = currentMessages();
+  if (!items || !items.length) return;
+
+  const firstUserMessage = items.find(
+    item => item.role === "user" || item.sender === "user"
+  );
+
+  const title =
+    firstUserMessage?.content ||
+    firstUserMessage?.text ||
+    "New conversation";
+
+  const history = getHistory();
+  const existingIndex = history.findIndex(
+    item => item.id === currentConversationId
+  );
+
+  const record = {
+    id: currentConversationId,
+    title: title.slice(0, 70),
+    mode: typeof currentMode !== "undefined" ? currentMode : "general",
+    messages: items,
+    updatedAt: new Date().toISOString()
+  };
+
+  if (existingIndex >= 0) history[existingIndex] = record;
+  else history.unshift(record);
+
+  saveHistory(history.slice(0, 50));
+  localStorage.setItem(
+    "bukason_current_conversation",
+    currentConversationId
+  );
+}
+
+function renderHistory() {
+  const history = getHistory();
+
+  if (!history.length) {
+    historyList.innerHTML =
+      '<p style="color:var(--sub);font-size:13px;">No saved conversations yet.</p>';
+    return;
+  }
+
+  historyList.innerHTML = history.map(item => `
+    <div class="history-item" data-id="${item.id}">
+      <div class="history-item-content">
+        <div class="history-item-title">${escapeHtml(item.title)}</div>
+        <div class="history-item-meta">
+          ${escapeHtml(item.mode || "general")} ·
+          ${new Date(item.updatedAt).toLocaleString()}
+        </div>
+      </div>
+      <button class="history-delete" data-delete-id="${item.id}">
+        Delete
+      </button>
+    </div>
+  `).join("");
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, character => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  }[character]));
+}
+
+function loadConversation(id) {
+  const record = getHistory().find(item => item.id === id);
+  if (!record) return;
+
+  currentConversationId = record.id;
+  localStorage.setItem("bukason_current_conversation", record.id);
+
+  if (typeof messages !== "undefined") {
+    messages = record.messages || [];
+  }
+
+  if (typeof renderMessages === "function") renderMessages();
+  if (typeof renderChat === "function") renderChat();
+
+  closeHistory();
+}
+
+menuToggle?.addEventListener("click", openMenu);
+menuBackdrop?.addEventListener("click", closeMenu);
+historyBtn?.addEventListener("click", openHistory);
+closeHistoryBtn?.addEventListener("click", closeHistory);
+
+newChatBtn?.addEventListener("click", () => {
+  closeMenu();
+  currentConversationId = crypto.randomUUID();
+
+  if (typeof messages !== "undefined") messages = [];
+  if (typeof renderMessages === "function") renderMessages();
+  if (typeof renderChat === "function") renderChat();
+});
+
+clearChatBtn?.addEventListener("click", () => {
+  if (!confirm("Clear this conversation?")) return;
+
+  if (typeof messages !== "undefined") messages = [];
+  if (typeof renderMessages === "function") renderMessages();
+  if (typeof renderChat === "function") renderChat();
+
+  const remaining = getHistory().filter(
+    item => item.id !== currentConversationId
+  );
+
+  saveHistory(remaining);
+  closeMenu();
+});
+
+document.querySelectorAll(".category-btn").forEach(button => {
+  button.addEventListener("click", () => {
+    const mode = button.dataset.mode;
+
+    if (typeof setMode === "function") {
+      setMode(mode);
+    } else if (typeof currentMode !== "undefined") {
+      currentMode = mode;
+    }
+
+    closeMenu();
+  });
+});
+
+historyList?.addEventListener("click", event => {
+  const deleteId = event.target.dataset.deleteId;
+
+  if (deleteId) {
+    event.stopPropagation();
+    saveHistory(getHistory().filter(item => item.id !== deleteId));
+    renderHistory();
+    return;
+  }
+
+  const item = event.target.closest(".history-item");
+  if (item) loadConversation(item.dataset.id);
+});
+
+setInterval(saveCurrentConversation, 2000);/
+  </script>
+</body>
+</html>
