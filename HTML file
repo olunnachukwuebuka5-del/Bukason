@@ -1,0 +1,40 @@
+<button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+  <span></span>
+  <span></span>
+  <span></span>
+</button>
+
+<aside class="side-menu" id="sideMenu">
+  <div class="menu-title">BUKASON</div>
+
+  <button class="menu-item" id="newChatBtn">＋ New chat</button>
+  <button class="menu-item" id="historyBtn">◷ History</button>
+
+  <div class="menu-divider"></div>
+
+  <button class="menu-item category-btn" data-mode="academics">
+    🎓 Academics
+  </button>
+  <button class="menu-item category-btn" data-mode="business">
+    💼 Business
+  </button>
+  <button class="menu-item category-btn" data-mode="general">
+    💬 General
+  </button>
+
+  <div class="menu-divider"></div>
+
+  <button class="menu-item danger" id="clearChatBtn">
+    🗑 Clear current chat
+  </button>
+</aside>
+
+<div class="menu-backdrop" id="menuBackdrop"></div>
+
+<section class="history-panel" id="historyPanel">
+  <div class="history-header">
+    <h2>Chat history</h2>
+    <button id="closeHistoryBtn" aria-label="Close history">×</button>
+  </div>
+  <div id="historyList"></div>
+</section>
