@@ -34,25 +34,41 @@ exports.handler = async function (event) {
   const model = 'gemini-flash-latest';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey
-      },
-      body: JSON.stringify({
-        contents,
-        system_instruction: { parts: [{ text: systemPrompt || '' }] }
-      })
-    });
+  const requestBody = {
+    contents,
+    system_instruction: { parts: [{ text: systemPrompt || '' }] }
+  };
 
-    const data = await response.json();
+  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+  try {
+    let response, data;
+    const delays = [0, 1500, 3000]; // retry up to 3 times if Google's servers are briefly overloaded
+
+    for (let attempt = 0; attempt < delays.length; attempt++) {
+      if (delays[attempt] > 0) await sleep(delays[attempt]);
+
+      response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      data = await response.json();
+
+      if (response.ok || response.status !== 503) break;
+    }
 
     if (!response.ok) {
+      const friendly = response.status === 503
+        ? "The AI service is very busy right now. Please try again in a few seconds."
+        : (data.error && data.error.message ? data.error.message : 'AI request failed');
       return {
         statusCode: response.status,
-        body: JSON.stringify({ error: data.error && data.error.message ? data.error.message : 'AI request failed' })
+        body: JSON.stringify({ error: friendly })
       };
     }
 
