@@ -1,10 +1,13 @@
 // Netlify serverless function — keeps API keys secret on the server.
 //
-// Strategy (in order):
-//  1. OpenRouter — discovers CURRENTLY free models at request time instead of
-//     using hardcoded names, since free models rotate/get deprecated often.
-//  2. Gemini — retried a couple of times in case of a brief overload.
-//  3. Cerebras — last resort (its free daily tier ended July 2026; it may
+// Strategy (in order, per which keys are set — see handler below):
+//  1. Gemini — retried a couple of times in case of a brief overload.
+//  2. NVIDIA NIM / Cloudflare Workers AI / Groq — additional fallbacks.
+//  3. Mistral (La Plateforme) — permanent free tier, added as a backup
+//     since Groq's signup flow has had intermittent issues.
+//  4. OpenRouter — discovers CURRENTLY free models at request time instead
+//     of using hardcoded names, since free models rotate/get deprecated often.
+//  5. Cerebras — last resort (its free daily tier ended July 2026; it may
 //     still work if trial/paid credits are available).
 //
 // Every failure is logged with its real reason so problems can be diagnosed
@@ -185,6 +188,36 @@ async function tryGroq(apiKey, systemPrompt, history, log) {
   return null;
 }
 
+async function tryMistral(apiKey, systemPrompt, history, log) {
+  const messages = [
+    { role: 'system', content: systemPrompt || '' },
+    ...history.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }))
+  ];
+  const models = ['mistral-small-latest', 'open-mistral-nemo'];
+
+  for (const model of models) {
+    try {
+      const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({ model, messages })
+      });
+      if (!response.ok) {
+        const errBody = await response.text().catch(() => '');
+        log.push(`Mistral/${model}: HTTP ${response.status} ${errBody.slice(0, 130)}`);
+        continue;
+      }
+      const data = await response.json();
+      const text = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+      if (text) return text;
+      log.push(`Mistral/${model}: empty response`);
+    } catch (e) {
+      log.push(`Mistral/${model}: ${e.message}`);
+    }
+  }
+  return null;
+}
+
 async function tryCloudflare(accountId, apiToken, systemPrompt, history, log) {
   const messages = [
     { role: 'system', content: systemPrompt || '' },
@@ -257,10 +290,11 @@ exports.handler = async function (event) {
   const cerebrasKey = process.env.CEREBRAS_API_KEY;
   const nvidiaKey = process.env.NVIDIA_API_KEY;
   const groqKey = process.env.GROQ_API_KEY;
+  const mistralKey = process.env.MISTRAL_API_KEY;
   const cfAccountId = process.env.CLOUDFLARE_ACCOUNT_ID;
   const cfApiToken = process.env.CLOUDFLARE_API_TOKEN;
 
-  if (!openRouterKey && !geminiKey && !cerebrasKey && !nvidiaKey && !groqKey && !(cfAccountId && cfApiToken)) {
+  if (!openRouterKey && !geminiKey && !cerebrasKey && !nvidiaKey && !groqKey && !mistralKey && !(cfAccountId && cfApiToken)) {
     return {
       statusCode: 500,
       body: JSON.stringify({ error: 'Server is missing AI keys. Add OPENROUTER_API_KEY in Netlify environment variables.' })
@@ -286,7 +320,8 @@ exports.handler = async function (event) {
 
     // Order: Gemini (1,000/day, most reliable) -> NVIDIA NIM (no daily cap)
     // -> Cloudflare Workers AI (~200-400/day, different infra) -> Groq
-    // -> OpenRouter (small backup) -> Cerebras (last resort).
+    // -> Mistral (permanent free tier backup) -> OpenRouter (small backup)
+    // -> Cerebras (last resort).
     if (geminiKey) {
       text = await tryGemini(geminiKey, systemPrompt, history, log);
     }
@@ -298,6 +333,9 @@ exports.handler = async function (event) {
     }
     if (!text && groqKey) {
       text = await tryGroq(groqKey, systemPrompt, history, log);
+    }
+    if (!text && mistralKey) {
+      text = await tryMistral(mistralKey, systemPrompt, history, log);
     }
     if (!text && openRouterKey) {
       text = await tryOpenRouter(openRouterKey, systemPrompt, history, log);
@@ -324,3 +362,4 @@ exports.handler = async function (event) {
     return { statusCode: 500, body: JSON.stringify({ error: 'Network error reaching the AI service', debug: log }) };
   }
 };
+        
