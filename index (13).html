@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>BUKASON AI — Think. Collaborate. Solve.</title>
+<meta name="description" content="BUKASON AI is a collaborative AI platform where students study, discuss, and solve problems together with AI.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  /* ============================================================
+     BUKASON AI — DESIGN TOKENS
+     ============================================================ */
+  :root{
+    /* -- Brand palette: deep academic navy + warm brass gold -- */
+    --navy-950: #081226;   /* page background */
+    --navy-900: #0d1c38;   /* base surface */
+    --navy-800: #142a4e;   /* raised surface */
+    --navy-700: #1d3a68;   /* border / hairline on navy */
+    --gold-500: #c99a3c;   /* primary accent, brass gold */
+    --gold-400: #e0b65c;   /* lighter gold, hover/highlight */
+    --gold-300: #f2d896;   /* pale gold, subtle tints */
+    --paper:    #f4efe3;   /* warm off-white for text on navy */
+    --ink-muted:#9fb0c9;   /* muted slate-blue text */
+    --ink-faint:#5f7396;   /* faintest supporting text */
+    --success:  #6fae83;
+
+    /* -- Type -- */
+    --font-display: "Fraunces", "Georgia", serif;
+    --font-body: "Work Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+    /* -- Layout -- */
+    --gutter: 20px;
+    --radius-card: 14px;
+    --radius-pill: 999px;
+    --nav-height: 68px;
+    --max-width: 480px; /* mobile-first canvas; widens via media queries */
+  }
+
+  *{ box-sizing: border-box; }
+  html{ -webkit-text-size-adjust: 100%; }
+
+  body{
+    margin: 0;
+    background: var(--navy-950);
+    background-image:
+      radial-gradient(ellipse 900px 500px at 15% -10%, rgba(201,154,60,0.10), transparent 60%),
+      radial-gradient(ellipse 700px 400px at 100% 0%, rgba(30,58,104,0.35), transparent 55%);
+    color: var(--paper);
+    font-family: var(--font-body);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+
+  a{ color: inherit; text-decoration: none; }
+  button{ font-family: inherit; cursor: pointer; }
+
+  :focus-visible{
+    outline: 2px solid var(--gold-400);
+    outline-offset: 2px;
+  }
+
+  .shell{
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding-bottom: calc(var(--nav-height) + 28px);
+    position: relative;
+  }
+
+  @media (min-width: 720px){
+    .shell{ max-width: 640px; }
+  }
+  @media (min-width: 1080px){
+    .shell{ max-width: 760px; }
+  }
+
+  /* ============================================================
+     HEADER
+     ============================================================ */
+  .site-header{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px var(--gutter) 14px;
+    border-bottom: 1px solid var(--navy-700);
+  }
+
+  .brand-mark{
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .brand-glyph{
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    background: linear-gradient(155deg, var(--gold-400), var(--gold-500) 65%);
+    color: var(--navy-950);
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 17px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transform: translateY(2px);
+  }
+
+  .brand-text h1{
+    font-family: var(--font-display);
+    font-size: 21px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    margin: 0;
+    line-height: 1;
+  }
+
+  .brand-text p{
+    margin: 4px 0 0;
+    font-size: 11.5px;
+    color: var(--ink-faint);
+    font-style: italic;
+    letter-spacing: 0.3px;
+  }
+
+  .menu-btn{
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid var(--navy-700);
+    background: var(--navy-900);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--paper);
+  }
+  .menu-btn svg{ width: 18px; height: 18px; }
+
+  /* ============================================================
+     WELCOME / HERO
+     ============================================================ */
+  .hero{
+    padding: 30px var(--gutter) 26px;
+  }
+
+  .hero-kicker{
+    font-size: 13px;
+    color: var(--gold-400);
+    margin: 0 0 8px;
+  }
+
+  .hero h2{
+    font-family: var(--font-display);
+    font-size: clamp(28px, 8vw, 38px);
+    line-height: 1.12;
+    font-weight: 600;
+    margin: 0 0 14px;
+    max-width: 15ch;
+  }
+
+  .hero p{
+    color: var(--ink-muted);
+    font-size: 15px;
+    max-width: 42ch;
+    margin: 0;
+  }
+
+  /* ============================================================
+     QUICK ACTIONS
+     ============================================================ */
+  .section{
+    padding: 26px var(--gutter);
+  }
+
+  .section-head{
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .section-head h3{
+    font-family: var(--font-display);
+    font-size: 19px;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .section-head .see-all{
+    font-size: 13px;
+    color: var(--gold-400);
+    border-bottom: 1px solid rgba(201,154,60,0.4);
+    padding-bottom: 1px;
+  }
+
+  .quick-grid{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .quick-card{
+    background: var(--navy-900);
+    border: 1px solid var(--navy-700);
+    border-radius: var(--radius-card);
+    padding: 18px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    min-height: 108px;
+    text-align: left;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+  }
+
+  .quick-card:active{ transform: scale(0.98); }
+
+  .quick-card .icon{
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--gold-400);
+  }
+  .quick-card .icon svg{ width: 24px; height: 24px; }
+
+  .quick-card span{
+    font-size: 14.5px;
+    font-weight: 600;
+    color: var(--paper);
+  }
+
+  .quick-card.accent{
+    background: linear-gradient(160deg, var(--gold-500), #b5842c 85%);
+    border-color: transparent;
+  }
+  .quick-card.accent .icon{ color: var(--navy-950); }
+  .quick-card.accent span{ color: var(--navy-950); }
+
+  /* ============================================================
+     COLLABORATIVE SECTION — the memorable moment
+     ============================================================ */
+  .collab{
+    margin: 8px var(--gutter) 0;
+    border-radius: 20px;
+    background: var(--navy-900);
+    border: 1px solid var(--navy-700);
+    padding: 28px 22px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .collab::before{
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 85% 0%, rgba(201,154,60,0.16), transparent 55%);
+    pointer-events: none;
+  }
+
+  .collab-flow{
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    font-size: 12.5px;
+    color: var(--ink-faint);
+    margin-bottom: 18px;
+    position: relative;
+  }
+
+  .collab-flow .node{
+    background: var(--navy-800);
+    border: 1px solid var(--navy-700);
+    padding: 5px 10px;
+    border-radius: var(--radius-pill);
+    color: var(--ink-muted);
+  }
+  .collab-flow .node.active{
+    border-color: var(--gold-500);
+    color: var(--gold-300);
+  }
+  .collab-flow .arrow{ color: var(--ink-faint); }
+
+  .collab h3{
+    font-family: var(--font-display);
+    font-size: 24px;
+    line-height: 1.2;
+    font-weight: 600;
+    margin: 0 0 12px;
+    max-width: 20ch;
+    position: relative;
+  }
+
+  .collab p{
+    color: var(--ink-muted);
+    font-size: 14.5px;
+    max-width: 40ch;
+    margin: 0 0 22px;
+    position: relative;
+  }
+
+  .btn-primary{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: var(--gold-500);
+    color: var(--navy-950);
+    font-weight: 600;
+    font-size: 15px;
+    padding: 13px 22px;
+    border-radius: var(--radius-pill);
+    border: none;
+    width: 100%;
+    position: relative;
+  }
+
+  @media (min-width: 480px){
+    .btn-primary{ width: auto; }
+  }
+
+  /* ============================================================
+     MY GROUPS
+     ============================================================ */
+  .group-list{
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .group-card{
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--navy-900);
+    border: 1px solid var(--navy-700);
+    border-left: 3px solid var(--gold-500);
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+
+  .group-card .avatar{
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    background: var(--navy-800);
+    color: var(--gold-400);
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .group-card .info{ flex: 1; min-width: 0; }
+
+  .group-card .info h4{
+    margin: 0 0 3px;
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .group-card .meta{
+    font-size: 12.5px;
+    color: var(--ink-faint);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .group-card .meta .dot{
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--success);
+    flex-shrink: 0;
+  }
+
+  .group-card .open-btn{
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--gold-400);
+    background: transparent;
+    border: 1px solid var(--navy-700);
+    padding: 8px 14px;
+    border-radius: var(--radius-pill);
+    flex-shrink: 0;
+  }
+
+  .demo-note{
+    margin-top: 14px;
+    font-size: 12px;
+    color: var(--ink-faint);
+  }
+  .demo-note code{
+    background: var(--navy-800);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+  }
+
+  /* ============================================================
+     AI CHAT SHORTCUT
+     ============================================================ */
+  .chat-banner{
+    margin: 8px var(--gutter) 0;
+    background: var(--navy-800);
+    border: 1px solid var(--navy-700);
+    border-radius: var(--radius-card);
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .chat-banner .icon{
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--navy-950);
+    border: 1px solid var(--gold-500);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--gold-400);
+    flex-shrink: 0;
+  }
+  .chat-banner .icon svg{ width: 20px; height: 20px; }
+
+  .chat-banner .text{ flex: 1; }
+  .chat-banner h4{
+    font-family: var(--font-display);
+    font-size: 16px;
+    margin: 0 0 3px;
+  }
+  .chat-banner p{
+    font-size: 13px;
+    color: var(--ink-muted);
+    margin: 0 0 12px;
+  }
+
+  .btn-secondary{
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--navy-950);
+    background: var(--gold-400);
+    padding: 9px 16px;
+    border-radius: var(--radius-pill);
+    border: none;
+  }
+
+  /* ============================================================
+     FOOTER
+     ============================================================ */
+  .site-footer{
+    padding: 30px var(--gutter) 10px;
+    text-align: center;
+    color: var(--ink-faint);
+    font-size: 12px;
+  }
+  .site-footer p{ margin: 4px 0; }
+
+  /* ============================================================
+     BOTTOM NAVIGATION
+     ============================================================ */
+  .bottom-nav{
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    height: var(--nav-height);
+    background: rgba(13,28,56,0.92);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid var(--navy-700);
+    display: flex;
+    justify-content: center;
+    z-index: 50;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .bottom-nav-inner{
+    width: 100%;
+    max-width: var(--max-width);
+    display: flex;
+  }
+  @media (min-width: 720px){ .bottom-nav-inner{ max-width: 640px; } }
+  @media (min-width: 1080px){ .bottom-nav-inner{ max-width: 760px; } }
+
+  .nav-item{
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    background: transparent;
+    border: none;
+    color: var(--ink-faint);
+    font-size: 10.5px;
+    font-weight: 500;
+    padding: 6px 0;
+  }
+
+  .nav-item svg{ width: 21px; height: 21px; }
+
+  .nav-item.is-active{ color: var(--gold-400); }
+
+  .nav-item .dash{
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: var(--gold-400);
+    opacity: 0;
+  }
+  .nav-item.is-active .dash{ opacity: 1; }
+
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ============================================================
+       HEADER
+       FUTURE: profile/menu button should open an authenticated
+       user menu once Auth (login/signup, session state) is wired up.
+       ============================================================ -->
+  <header class="site-header">
+    <div class="brand-mark">
+      <div class="brand-glyph" aria-hidden="true">B</div>
+      <div class="brand-text">
+        <h1>BUKASON AI</h1>
+        <p>Scientia Potentia Est</p>
+      </div>
+    </div>
+    <button class="menu-btn" type="button" aria-label="Open menu" data-action="open-menu">
+      <!-- FUTURE: wire to profile/account menu once Auth exists -->
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="3.4"/><path d="M4.5 20c1.4-3.6 4.4-5.5 7.5-5.5s6.1 1.9 7.5 5.5"/></svg>
+    </button>
+  </header>
+
+  <!-- ============================================================
+       WELCOME SECTION
+       ============================================================ -->
+  <section class="hero">
+    <p class="hero-kicker">for students, by design</p>
+    <h2>Think. Collaborate. Solve.</h2>
+    <p>BUKASON AI helps you work with AI on your own, or bring your study group into one shared space to brainstorm, question ideas, and turn discussion into a result everyone can use.</p>
+  </section>
+
+  <!-- ============================================================
+       QUICK ACTIONS
+       ============================================================ -->
+  <section class="section" aria-labelledby="quick-actions-heading">
+    <div class="section-head">
+      <h3 id="quick-actions-heading">Quick actions</h3>
+    </div>
+    <div class="quick-grid">
+
+      <!-- FUTURE: connect to AI chat route once AI API integration exists -->
+      <button class="quick-card accent" type="button" data-action="ask-ai">
+        <span class="icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a7 7 0 0 0-7 7c0 3 1.6 4.8 2.4 5.6.4.4.6.9.6 1.4v1h8v-1c0-.5.2-1 .6-1.4C17.4 14.8 19 13 19 10a7 7 0 0 0-7-7Z"/><path d="M9.5 21h5"/></svg>
+        </span>
+        <span>Ask AI</span>
+      </button>
+
+      <!-- FUTURE: connect to group-creation flow once Database/Groups exist -->
+      <button class="quick-card" type="button" data-action="create-group">
+        <span class="icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+        </span>
+        <span>Create Group</span>
+      </button>
+
+      <!-- FUTURE: connect to join-by-code/invite flow once Real-time Groups exist -->
+      <button class="quick-card" type="button" data-action="join-group">
+        <span class="icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 16l4-4-4-4M14 12H3"/></svg>
+        </span>
+        <span>Join Group</span>
+      </button>
+
+      <!-- FUTURE: connect to group list route once Database exists -->
+      <button class="quick-card" type="button" data-action="my-groups">
+        <span class="icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.6"/><path d="M3.5 19c.6-2.9 2.5-4.5 4.5-4.5s3.9 1.6 4.5 4.5M13.5 19c.4-2.1 1.7-3.6 3.5-3.6s3.1 1.5 3.5 3.6"/></svg>
+        </span>
+        <span>My Groups</span>
+      </button>
+
+    </div>
+  </section>
+
+  <!-- ============================================================
+       COLLABORATIVE AI SECTION
+       ============================================================ -->
+  <section aria-labelledby="collab-heading">
+    <div class="collab">
+      <div class="collab-flow" aria-hidden="true">
+        <span class="node">Students</span>
+        <span class="arrow">→</span>
+        <span class="node">Group</span>
+        <span class="arrow">→</span>
+        <span class="node">Discussion</span>
+        <span class="arrow">→</span>
+        <span class="node active">BUKASON AI</span>
+        <span class="arrow">→</span>
+        <span class="node">Result</span>
+      </div>
+      <h3 id="collab-heading">Think Together. Solve Better.</h3>
+      <p>Bring people and AI into the same workspace. Brainstorm together, challenge ideas, organize discussions and turn collective thinking into useful results.</p>
+      <!-- FUTURE: connect to group-creation flow once Database/Groups exist -->
+      <button class="btn-primary" type="button" data-action="start-group">Start a Group</button>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       MY GROUPS (placeholder / demo data)
+       FUTURE: replace groupData below with a real fetch from the
+       database once it exists. Keep the same card markup.
+       ============================================================ -->
+  <section class="section" aria-labelledby="my-groups-heading">
+    <div class="section-head">
+      <h3 id="my-groups-heading">My Groups</h3>
+      <a href="#" class="see-all" data-action="view-all-groups">See all</a>
+    </div>
+
+    <div class="group-list" id="group-list">
+      <!-- DEMO DATA: static placeholder, not from a database -->
+      <div class="group-card">
+        <div class="avatar" aria-hidden="true">ML</div>
+        <div class="info">
+          <h4>Medical Laboratory Study Group</h4>
+          <div class="meta"><span class="dot"></span>18 members · active now</div>
+        </div>
+        <button class="open-btn" type="button" data-action="open-group" data-group="medical-lab-study-group">Open Group</button>
+      </div>
+
+      <div class="group-card">
+        <div class="avatar" aria-hidden="true">JB</div>
+        <div class="info">
+          <h4>JAMB Preparation</h4>
+          <div class="meta"><span class="dot"></span>34 members · 6 new messages</div>
+        </div>
+        <button class="open-btn" type="button" data-action="open-group" data-group="jamb-preparation">Open Group</button>
+      </div>
+
+      <div class="group-card">
+        <div class="avatar" aria-hidden="true">BB</div>
+        <div class="info">
+          <h4>BUKASON Builders</h4>
+          <div class="meta"><span class="dot"></span>9 members · planning session</div>
+        </div>
+        <button class="open-btn" type="button" data-action="open-group" data-group="bukason-builders">Open Group</button>
+      </div>
+    </div>
+
+    <p class="demo-note">Placeholder data for preview only — replace <code>#group-list</code> contents with real records once the database is connected.</p>
+  </section>
+
+  <!-- ============================================================
+       AI CHAT SHORTCUT
+       ============================================================ -->
+  <section class="section" aria-labelledby="chat-shortcut-heading">
+    <div class="chat-banner">
+      <div class="icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4V5Z"/></svg>
+      </div>
+      <div class="text">
+        <h4 id="chat-shortcut-heading">Need an answer now?</h4>
+        <p>Ask BUKASON AI anything.</p>
+        <!-- FUTURE: connect to AI chat route once AI API integration exists -->
+        <button class="btn-secondary" type="button" data-action="chat-with-ai">Chat with AI</button>
+      </div>
+    </div>
+  </section>
+
+  <footer class="site-footer">
+    <p>BUKASON AI · Scientia Potentia Est</p>
+    <p>Frontend foundation — v0.1 prototype</p>
+  </footer>
+
+</div>
+
+<!-- ============================================================
+     BOTTOM NAVIGATION
+     FUTURE: drive .is-active state from client-side routing once
+     multiple pages/views exist.
+     ============================================================ -->
+<nav class="bottom-nav" aria-label="Primary">
+  <div class="bottom-nav-inner">
+    <button class="nav-item is-active" type="button" data-action="nav-home" aria-current="page">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v9h12v-9"/></svg>
+      <span>Home</span>
+      <span class="dash" aria-hidden="true"></span>
+    </button>
+    <button class="nav-item" type="button" data-action="nav-groups">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.6"/><path d="M3.5 19c.6-2.9 2.5-4.5 4.5-4.5s3.9 1.6 4.5 4.5M13.5 19c.4-2.1 1.7-3.6 3.5-3.6s3.1 1.5 3.5 3.6"/></svg>
+      <span>Groups</span>
+      <span class="dash" aria-hidden="true"></span>
+    </button>
+    <button class="nav-item" type="button" data-action="nav-ai">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a7 7 0 0 0-7 7c0 3 1.6 4.8 2.4 5.6.4.4.6.9.6 1.4v1h8v-1c0-.5.2-1 .6-1.4C17.4 14.8 19 13 19 10a7 7 0 0 0-7-7Z"/><path d="M9.5 21h5"/></svg>
+      <span>AI</span>
+      <span class="dash" aria-hidden="true"></span>
+    </button>
+    <button class="nav-item" type="button" data-action="nav-history">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v6h6"/><path d="M4.5 12.5A8 8 0 1 0 6 6.3L4 10"/><path d="M12 8v5l3 2"/></svg>
+      <span>History</span>
+      <span class="dash" aria-hidden="true"></span>
+    </button>
+    <button class="nav-item" type="button" data-action="nav-profile">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M4.5 20c1.4-3.6 4.4-5.5 7.5-5.5s6.1 1.9 7.5 5.5"/></svg>
+      <span>Profile</span>
+      <span class="dash" aria-hidden="true"></span>
+    </button>
+  </div>
+</nav>
+
+<script>
+  /* ============================================================
+     BUKASON AI — FRONTEND FOUNDATION SCRIPT
+     This file intentionally contains NO backend/API calls.
+     It only wires up UI state so future features can hook in.
+     ============================================================ */
+
+  document.addEventListener('DOMContentLoaded', () => {
+
+    // --- Bottom nav: swap the active tab on tap (visual only) ---
+    // FUTURE: replace this with real client-side routing / view swapping.
+    const navItems = document.querySelectorAll('.nav-item');
+    navItems.forEach(item => {
+      item.addEventListener('click', () => {
+        navItems.forEach(i => {
+          i.classList.remove('is-active');
+          i.removeAttribute('aria-current');
+        });
+        item.classList.add('is-active');
+        item.setAttribute('aria-current', 'page');
+      });
+    });
+
+    // --- Generic action logger for every data-action button ---
+    // FUTURE: replace each case with real navigation / API calls:
+    //   ask-ai / chat-with-ai   -> AI API integration
+    //   create-group / start-group / join-group -> Database + Real-time Groups
+    //   my-groups / view-all-groups / open-group -> Database
+    //   open-menu / nav-profile -> Authentication
+    document.querySelectorAll('[data-action]').forEach(el => {
+      el.addEventListener('click', (e) => {
+        const action = el.getAttribute('data-action');
+        const group = el.getAttribute('data-group');
+        if (action === 'nav-home' || action === 'nav-groups' || action === 'nav-ai' ||
+            action === 'nav-history' || action === 'nav-profile') {
+          return; // handled by the nav-active-state listener above
+        }
+        if (el.tagName === 'A') e.preventDefault();
+        console.log('[BUKASON AI] action:', action, group ? `(group: ${group})` : '');
+      });
+    });
+
+  });
+</script>
+
+</body>
+</html>
