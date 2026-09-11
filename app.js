@@ -193,7 +193,16 @@ logoutBtn.addEventListener('click', async () => {
 });
 
 // ---------------- Boot: wait for Supabase client, then check session ----------------
+let bootTimeoutId = setTimeout(() => {
+  if (!supabase) {
+    showAuthError("Couldn't connect — check your internet connection and reload the page.");
+    loginBtn.disabled = false;
+    signupBtn.disabled = false;
+  }
+}, 15000); // generous timeout for slower mobile connections
+
 window.addEventListener('supabase-ready', async () => {
+  clearTimeout(bootTimeoutId);
   supabase = window.supabaseClient;
   loginBtn.disabled = false;
   signupBtn.disabled = false;
@@ -208,15 +217,12 @@ window.addEventListener('supabase-ready', async () => {
   }
 });
 
-// If the Supabase client fails to load at all (blocked script, bad network),
-// don't leave the buttons disabled forever with no explanation.
-setTimeout(() => {
-  if (!supabase) {
-    showAuthError("Couldn't connect — check your internet connection and reload the page.");
-    loginBtn.disabled = false;
-    signupBtn.disabled = false;
-  }
-}, 8000);
+window.addEventListener('supabase-failed', (e) => {
+  clearTimeout(bootTimeoutId);
+  loginBtn.disabled = false;
+  signupBtn.disabled = false;
+  showAuthError('Login system failed to load: ' + (e.detail || 'unknown error') + '. Try reloading the page or switching networks.');
+});
 
 // ---------------- Mode / menu ----------------
 function renderChips(){
