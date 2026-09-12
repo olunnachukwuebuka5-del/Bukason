@@ -4,7 +4,7 @@
 // the report form, and PWA install prompt.
 // ============================================================
 
-let supabase = null;
+let sb = null;
 let currentUser = null;
 let mode = 'academics';
 let history = [];
@@ -122,12 +122,12 @@ function hideAuthNotice(){
 loginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   hideAuthError();
-  if (!supabase) { showAuthError("Still connecting — please wait a moment and try again."); return; }
+  if (!sb) { showAuthError("Still connecting — please wait a moment and try again."); return; }
   const email = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
   setAuthBusy(true);
   try{
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
     if (error) { showAuthError(error.message); return; }
     onAuthSuccess(data.user);
   }catch(err){
@@ -141,14 +141,14 @@ loginForm.addEventListener('submit', async (e) => {
 signupForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   hideAuthError();
-  if (!supabase) { showAuthError("Still connecting — please wait a moment and try again."); return; }
+  if (!sb) { showAuthError("Still connecting — please wait a moment and try again."); return; }
   const full_name = document.getElementById('signupName').value.trim();
   const email = document.getElementById('signupEmail').value.trim();
   const whatsapp = document.getElementById('signupWhatsapp').value.trim();
   const password = document.getElementById('signupPassword').value;
   setAuthBusy(true);
   try{
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error } = await sb.auth.signUp({
       email, password,
       options: { data: { full_name, whatsapp } }
     });
@@ -184,7 +184,7 @@ function onAuthSuccess(user){
 }
 
 logoutBtn.addEventListener('click', async () => {
-  await supabase.auth.signOut();
+  await sb.auth.signOut();
   currentUser = null;
   history = [];
   chatEl.innerHTML = '';
@@ -194,7 +194,7 @@ logoutBtn.addEventListener('click', async () => {
 
 // ---------------- Boot: wait for Supabase client, then check session ----------------
 let bootTimeoutId = setTimeout(() => {
-  if (!supabase) {
+  if (!sb) {
     showAuthError("Couldn't connect — check your internet connection and reload the page.");
     loginBtn.disabled = false;
     signupBtn.disabled = false;
@@ -203,12 +203,12 @@ let bootTimeoutId = setTimeout(() => {
 
 window.addEventListener('supabase-ready', async () => {
   clearTimeout(bootTimeoutId);
-  supabase = window.supabaseClient;
+  sb = window.supabaseClient;
   loginBtn.disabled = false;
   signupBtn.disabled = false;
   hideAuthNotice();
   try{
-    const { data } = await supabase.auth.getSession();
+    const { data } = await sb.auth.getSession();
     if (data.session && data.session.user) {
       onAuthSuccess(data.session.user);
     }
@@ -351,7 +351,7 @@ async function loadHistoryForMode(m){
   chatEl.innerHTML = '';
   if(!currentUser){ chatEl.appendChild(introEl); chatEl.appendChild(chipsEl); return; }
 
-  const { data, error } = await supabase
+  const { data, error } = await sb
     .from('messages')
     .select('role, content, created_at')
     .eq('user_id', currentUser.id)
@@ -372,7 +372,7 @@ async function loadHistoryForMode(m){
 async function renderFullHistory(){
   if(!currentUser) return;
   chatEl.innerHTML = '';
-  const { data, error } = await supabase
+  const { data, error } = await sb
     .from('messages')
     .select('role, content, mode, created_at')
     .eq('user_id', currentUser.id)
@@ -401,7 +401,7 @@ async function renderFullHistory(){
 
 async function saveMessage(role, content){
   if(!currentUser) return;
-  await supabase.from('messages').insert({
+  await sb.from('messages').insert({
     user_id: currentUser.id,
     mode: mode,
     role: role,
@@ -517,7 +517,7 @@ function removeAttachment(id){
   if(att && att.previewUrl) URL.revokeObjectURL(att.previewUrl);
   if(att && att.storagePath && currentUser){
     // best-effort cleanup; ignore failures
-    supabase.storage.from('attachments').remove([att.storagePath]).catch(()=>{});
+    sb.storage.from('attachments').remove([att.storagePath]).catch(()=>{});
   }
   pendingAttachments = pendingAttachments.filter(a => a.id !== id);
   renderAttachPreviews();
@@ -557,13 +557,13 @@ async function handleFilesSelected(files){
       const ext = realMime === 'application/pdf' ? 'pdf' : realMime.split('/')[1];
       const storagePath = currentUser.id + '/' + Date.now() + '_' + Math.random().toString(36).slice(2,8) + '.' + ext;
 
-      const { error: upErr } = await supabase.storage.from('attachments').upload(storagePath, file, {
+      const { error: upErr } = await sb.storage.from('attachments').upload(storagePath, file, {
         contentType: realMime,
         upsert: false
       });
       if(upErr) throw upErr;
 
-      const { data: signed, error: signErr } = await supabase.storage
+      const { data: signed, error: signErr } = await sb.storage
         .from('attachments')
         .createSignedUrl(storagePath, 3600); // 1 hour, plenty for one message round-trip
       if(signErr) throw signErr;
@@ -812,7 +812,7 @@ window.addEventListener('online', async () => {
     try{
       const turns = JSON.parse(item.content);
       for(const turn of turns){
-        await supabase.from('messages').insert({
+        await sb.from('messages').insert({
           user_id: currentUser.id,
           mode: item.mode,
           role: turn.role,
