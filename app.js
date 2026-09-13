@@ -118,6 +118,105 @@ function hideAuthNotice(){
   authNotice.style.display = 'none';
 }
 
+// ---------------- Forgot password ----------------
+const forgotPasswordLink = document.getElementById('forgotPasswordLink');
+const resetForm = document.getElementById('resetForm');
+const resetStep1 = document.getElementById('resetStep1');
+const resetStep2 = document.getElementById('resetStep2');
+const resetBtn = document.getElementById('resetBtn');
+const resetConfirmBtn = document.getElementById('resetConfirmBtn');
+const resendResetLink = document.getElementById('resendResetLink');
+const backToLoginFromReset = document.getElementById('backToLoginFromReset');
+const authTabsRow = document.querySelector('.auth-tabs');
+
+function showResetScreen(){
+  hideAuthError(); hideAuthNotice();
+  loginForm.style.display = 'none';
+  signupForm.style.display = 'none';
+  resetForm.style.display = 'block';
+  resetStep1.style.display = 'block';
+  resetStep2.style.display = 'none';
+  if (authTabsRow) authTabsRow.style.display = 'none';
+  switchLine.style.display = 'none';
+  const resetEmailField = document.getElementById('resetEmail');
+  if (resetEmailField) resetEmailField.value = document.getElementById('loginEmail').value.trim();
+}
+
+if (forgotPasswordLink) forgotPasswordLink.addEventListener('click', showResetScreen);
+
+if (backToLoginFromReset) {
+  backToLoginFromReset.addEventListener('click', () => {
+    hideAuthError(); hideAuthNotice();
+    resetForm.style.display = 'none';
+    loginForm.style.display = 'block';
+    if (authTabsRow) authTabsRow.style.display = 'flex';
+    switchLine.style.display = 'block';
+  });
+}
+
+async function sendResetCode(){
+  if (!sb) { showAuthError("Still connecting — please wait a moment and try again."); return; }
+  const email = document.getElementById('resetEmail').value.trim();
+  if (!email) { showAuthError("Enter your email first."); return; }
+  resetBtn.disabled = true;
+  try {
+    const { error } = await sb.auth.resetPasswordForEmail(email);
+    if (error) { showAuthError(error.message); return; }
+    showAuthNotice("Code sent to " + email + " — check your inbox (and spam folder), then enter it below.");
+    resetStep1.style.display = 'none';
+    resetStep2.style.display = 'block';
+  } catch (err) {
+    showAuthError("Couldn't reach the server: " + (err.message || 'unknown error') + ". Check your connection and try again.");
+    console.error('Reset password request failed:', err);
+  } finally {
+    resetBtn.disabled = false;
+  }
+}
+
+if (resetForm) {
+  resetForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await sendResetCode();
+  });
+}
+
+if (resendResetLink) {
+  resendResetLink.addEventListener('click', async () => {
+    hideAuthError(); hideAuthNotice();
+    await sendResetCode();
+  });
+}
+
+if (resetConfirmBtn) {
+  resetConfirmBtn.addEventListener('click', async () => {
+    hideAuthError();
+    if (!sb) { showAuthError("Still connecting — please wait a moment and try again."); return; }
+    const email = document.getElementById('resetEmail').value.trim();
+    const token = document.getElementById('resetToken').value.trim();
+    const newPassword = document.getElementById('resetNewPassword').value;
+    if (!token) { showAuthError("Enter the code from your email."); return; }
+    if (!newPassword || newPassword.length < 6) { showAuthError("New password must be at least 6 characters."); return; }
+    resetConfirmBtn.disabled = true;
+    try {
+      const { error: verifyError } = await sb.auth.verifyOtp({ email, token, type: 'recovery' });
+      if (verifyError) { showAuthError(verifyError.message); return; }
+      const { error: updateError } = await sb.auth.updateUser({ password: newPassword });
+      if (updateError) { showAuthError(updateError.message); return; }
+      await sb.auth.signOut();
+      resetForm.style.display = 'none';
+      loginForm.style.display = 'block';
+      if (authTabsRow) authTabsRow.style.display = 'flex';
+      switchLine.style.display = 'block';
+      showAuthNotice("Password updated — log in with your new password.");
+    } catch (err) {
+      showAuthError("Couldn't reach the server: " + (err.message || 'unknown error') + ". Check your connection and try again.");
+      console.error('Reset password confirm failed:', err);
+    } finally {
+      resetConfirmBtn.disabled = false;
+    }
+  });
+}
+
 // ---------------- Auth actions ----------------
 loginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -153,6 +252,13 @@ signupForm.addEventListener('submit', async (e) => {
       options: { data: { full_name, whatsapp } }
     });
     if (error) { showAuthError(error.message); return; }
+    // Supabase deliberately returns a fake "success" (no error) when the
+    // email is already registered, to avoid leaking which emails exist.
+    // The tell: identities comes back empty instead of containing the new signup.
+    if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+      showAuthError("An account with this email already exists. Try logging in instead, or use a different email.");
+      return;
+    }
     if (data.user && !data.session) {
       document.querySelector('.auth-tab[data-tab="login"]').click();
       showAuthNotice("Account created! Check your email inbox (" + email + ") for a confirmation link, then log in here.");
@@ -759,7 +865,7 @@ async function sendMessage(){
     if(offlineAI && offlineAI.isReady()){
       addTyping('Thinking (offline)…');
       try{
-        const reply = await offlineAI.reply(SYSTEM_PROMPTS[mode], history);
+        const reply = await offlineAI.reply(SYSTEM_PROMPTS[mode], history, mode);
         removeTyping();
         addMessage('bot', reply + "\n\n_(answered offline — will sync once you're back online)_");
         history.push({role:'assistant', content:reply});
@@ -767,8 +873,13 @@ async function sendMessage(){
         offlineAI.enqueue(mode, JSON.stringify([{role:'user',content:historyNote},{role:'assistant',content:reply}]));
       }catch(err){
         removeTyping();
-        addMessage('bot', "The offline AI hit an error on that one — please try again.");
-        console.error('Offline reply failed:', err);
+        if (err && err.message === 'NO_OFFLINE_MATCH') {
+          offlineAI.enqueue(mode, JSON.stringify([{role:'user',content:historyNote}]));
+          addMessage('bot', "I don't have this one saved for offline use yet — I'll answer once you're back online.");
+        } else {
+          addMessage('bot', "The offline AI hit an error on that one — please try again.");
+          console.error('Offline reply failed:', err);
+        }
       }
     }else{
       offlineAI && offlineAI.enqueue(mode, JSON.stringify([{role:'user',content:historyNote}]));

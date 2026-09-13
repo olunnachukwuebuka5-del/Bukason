@@ -1,34 +1,34 @@
 // ============================================================
-// BUKASON — Offline AI module
+// BUKASON — Offline Knowledge module
 //
-// Loads a small language model that runs entirely inside the
-// browser (via WebLLM + WebGPU), so BUKASON can keep answering
-// even with zero internet connection. app.js calls into this
-// through window.BukasonOfflineAI — this file is a classic
-// <script type="module">, so it self-registers that global.
+// Lightweight offline answering, NOT a downloaded AI model:
+// - While online, the app quietly fetches a small JSON file
+//   (offline-knowledge.json) — a few hundred KB of plain text
+//   Q&A, not a model. Costs about as much data as one webpage.
+// - That file gets cached on the device (localStorage).
+// - When offline, the app searches the cached pack with simple
+//   keyword matching and answers instantly from it if there's a
+//   good match. If there isn't, it says so honestly and queues
+//   the question for when the user is back online.
+// - Works on every phone/browser — no WebGPU, no big download,
+//   no GPU requirement.
 //
-// Requirements this depends on:
-// - Browser/device supports WebGPU (checked before doing anything)
-// - The model must be downloaded once WHILE ONLINE before it can
-//   be used offline (this file starts that download on page load)
-// - netlify.toml's CSP must allow the domains this fetches from
-//   (see the accompanying netlify.toml patch)
+// Growing the pack: offline-knowledge.json is a normal file you
+// edit (add more {question, keywords, answer, mode} entries) and
+// re-upload like any other site file. Each time the app goes
+// online it re-fetches the latest version automatically.
 // ============================================================
 
-const PREFERRED_MODEL_SUBSTRINGS = [
-  "SmolLM2-360M-Instruct",   // smallest — try first
-  "Qwen2.5-0.5B-Instruct",
-  "Llama-3.2-1B-Instruct",
-];
-
+const PACK_URL = "offline-knowledge.json";
+const STORAGE_KEY = "bukason_offline_knowledge";
 const QUEUE_KEY = "bukason_offline_queue";
+const MATCH_THRESHOLD = 0.4; // fraction of the question's words that must match an entry
 
-let engine = null;
-let ready = false;
-let failed = false;
-let modelId = null;
+let pack = null;
+let loaded = false;
+let loadFailed = false;
 
-// ---- Minimal status banner, injected so no index.html/CSS edits are required ----
+// ---- Minimal status banner ----
 const banner = document.createElement("div");
 banner.id = "offlineAiBanner";
 banner.style.cssText = `
@@ -42,124 +42,110 @@ function mountBanner() {
   else document.addEventListener("DOMContentLoaded", () => document.body.appendChild(banner));
 }
 mountBanner();
+function showBanner(text, color) { banner.style.display = "block"; banner.style.color = color || "#B9C4DA"; banner.textContent = text; }
+function hideBanner() { banner.style.display = "none"; }
+function flashBanner(text, color, ms = 4000) { showBanner(text, color); setTimeout(hideBanner, ms); }
 
-function showBanner(text, color) {
-  banner.style.display = "block";
-  banner.style.color = color || "#B9C4DA";
-  banner.textContent = text;
-}
-function hideBanner() {
-  banner.style.display = "none";
-}
-function flashBanner(text, color, ms = 4000) {
-  showBanner(text, color);
-  setTimeout(hideBanner, ms);
-}
-
-// ---- Loading the model ----
+// ---- Loading the knowledge pack ----
 async function init() {
-  if (!("gpu" in navigator)) {
-    failed = true;
-    flashBanner("Offline AI isn't supported on this browser — offline messages will be queued instead.", "#E8CD74", 6000);
-    return;
+  // 1) Use whatever was cached from a previous online visit, immediately —
+  //    this is what makes offline mode work even with no connection at all.
+  try {
+    const cached = localStorage.getItem(STORAGE_KEY);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed && Array.isArray(parsed.entries)) { pack = parsed; loaded = true; }
+    }
+  } catch (e) { /* ignore corrupt cache, fall through to fetch */ }
+
+  // 2) If online right now, fetch the latest pack in the background and
+  //    refresh the cache. Small file — negligible data cost.
+  if (navigator.onLine) {
+    try {
+      const res = await fetch(PACK_URL, { cache: "no-store" });
+      if (res.ok) {
+        const fresh = await res.json();
+        if (fresh && Array.isArray(fresh.entries)) {
+          pack = fresh;
+          loaded = true;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
+        }
+      }
+    } catch (err) {
+      console.error("BUKASON offline knowledge pack refresh failed:", err);
+      // Not fatal — whatever was already cached (if anything) still works.
+    }
   }
 
-  try {
-    const webllm = await import("https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm/+esm");
-
-    const available = webllm.prebuiltAppConfig.model_list.map((m) => m.model_id);
-    modelId = PREFERRED_MODEL_SUBSTRINGS
-      .map((needle) => available.find((id) => id.includes(needle)))
-      .find(Boolean);
-
-    if (!modelId) throw new Error("No suitable small model found in this WebLLM version.");
-
-    showBanner("Preparing offline AI…");
-
-    engine = await webllm.CreateMLCEngine(modelId, {
-      initProgressCallback: (report) => {
-        const pct = Math.round((report.progress || 0) * 100);
-        showBanner(`Downloading offline AI: ${pct}% (one-time, then works with no internet)`);
-      },
-    });
-
-    ready = true;
-    flashBanner("Offline AI ready ✓ — BUKASON will keep working with no internet.", "#7CD992", 3500);
-  } catch (err) {
-    failed = true;
-    flashBanner("Couldn't load offline AI on this device — offline messages will be queued instead.", "#E8CD74", 6000);
-    console.error("BUKASON offline AI setup failed:", err);
+  if (!loaded) {
+    loadFailed = true;
+    flashBanner("Offline answers aren't saved on this device yet — stay connected for a moment to enable them.", "#E8CD74", 7000);
   }
 }
 
-// ---- Generating a reply locally ----
-async function reply(systemPrompt, history) {
-  if (!ready) throw new Error("Offline engine not ready");
+function isReady() { return loaded && !!pack; }
+function hasFailed() { return loadFailed; }
 
-  const messages = [
-    {
-      role: "system",
-      content:
-        (systemPrompt || "") +
-        " You are currently running fully offline on the user's device using a small local model. Keep answers short and simple.",
-    },
-    // Only recent turns — small models have small context windows.
-    ...history.slice(-8).map((m) => ({
-      role: m.role === "assistant" ? "assistant" : "user",
-      content: m.content,
-    })),
-  ];
+// ---- Simple keyword matching (no AI, just word overlap) ----
+function tokenize(str) {
+  return (str || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+}
 
-  const completion = await engine.chat.completions.create({
-    messages,
-    temperature: 0.7,
-    max_tokens: 300,
+function scoreEntry(queryTokens, entry) {
+  const entryTokens = new Set([
+    ...tokenize(entry.question),
+    ...tokenize((entry.keywords || []).join(" ")),
+  ]);
+  if (entryTokens.size === 0 || queryTokens.length === 0) return 0;
+  let hits = 0;
+  queryTokens.forEach((t) => { if (entryTokens.has(t)) hits++; });
+  return hits / queryTokens.length;
+}
+
+function findBestMatch(query, mode) {
+  if (!pack || !Array.isArray(pack.entries)) return null;
+  const queryTokens = tokenize(query);
+  if (!queryTokens.length) return null;
+
+  let best = null;
+  let bestScore = 0;
+  pack.entries.forEach((entry) => {
+    if (entry.mode && mode && entry.mode !== mode && entry.mode !== "general") return;
+    const score = scoreEntry(queryTokens, entry);
+    if (score > bestScore) { bestScore = score; best = entry; }
   });
 
-  return completion.choices[0].message.content;
+  return bestScore >= MATCH_THRESHOLD ? best : null;
 }
 
-function isReady() {
-  return ready;
-}
-function hasFailed() {
-  return failed;
-}
-function currentModelId() {
-  return modelId;
+// ---- Public reply() — same shape app.js already expects ----
+async function reply(systemPrompt, history, mode) {
+  if (!isReady()) throw new Error("OFFLINE_KNOWLEDGE_NOT_READY");
+  const lastUserMsg = [...history].reverse().find((m) => m.role === "user");
+  const query = lastUserMsg ? lastUserMsg.content : "";
+  const match = findBestMatch(query, mode);
+  if (!match) throw new Error("NO_OFFLINE_MATCH");
+  return match.answer;
 }
 
-// ---- Queue for messages that couldn't be answered at all (offline + model not ready/unsupported) ----
+// ---- Queue for messages with no offline answer available (unchanged behavior) ----
 function getQueue() {
-  try {
-    return JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]");
-  } catch (e) {
-    return [];
-  }
+  try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]"); } catch (e) { return []; }
 }
-function saveQueueRaw(q) {
-  localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
-}
-function enqueue(mode, content) {
-  const q = getQueue();
-  q.push({ mode, content, ts: Date.now() });
-  saveQueueRaw(q);
-}
-function drainQueue() {
-  const q = getQueue();
-  saveQueueRaw([]);
-  return q;
-}
-function queueLength() {
-  return getQueue().length;
-}
+function saveQueueRaw(q) { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); }
+function enqueue(mode, content) { const q = getQueue(); q.push({ mode, content, ts: Date.now() }); saveQueueRaw(q); }
+function drainQueue() { const q = getQueue(); saveQueueRaw([]); return q; }
+function queueLength() { return getQueue().length; }
 
 window.BukasonOfflineAI = {
   init,
   reply,
   isReady,
   hasFailed,
-  currentModelId,
   enqueue,
   drainQueue,
   queueLength,
@@ -168,4 +154,4 @@ window.BukasonOfflineAI = {
   flashBanner,
 };
 
-init(); // start downloading/caching immediately, while we're online
+init();

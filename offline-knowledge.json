@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "updated": "2026-09-13",
+  "entries": [
+    {
+      "mode": "academics",
+      "question": "How is JAMB scored?",
+      "keywords": ["jamb", "score", "scoring", "utme", "marks"],
+      "answer": "JAMB (UTME) has 4 subjects, each scored out of 100, for a total out of 400. English is compulsory. Your score is based on the number of correct answers — there's no negative marking for wrong answers, so always attempt every question."
+    },
+    {
+      "mode": "academics",
+      "question": "What is the UTME cut off mark",
+      "keywords": ["cutoff", "cut-off", "utme", "admission", "mark"],
+      "answer": "The UTME cut-off mark is the minimum JAMB score needed to be considered for admission. JAMB sets a national minimum (often 140-160), but each university and course can set its own higher cut-off. Always check your specific school and course's requirement."
+    },
+    {
+      "mode": "academics",
+      "question": "Explain photosynthesis simply",
+      "keywords": ["photosynthesis", "plants", "biology", "sunlight"],
+      "answer": "Photosynthesis is how plants make their own food. Using sunlight, water (from the soil), and carbon dioxide (from the air), plants produce glucose (sugar for energy) and release oxygen as a byproduct. It mostly happens in the leaves, in a part of the cell called the chloroplast."
+    },
+    {
+      "mode": "business",
+      "question": "How can a student start earning online",
+      "keywords": ["earn", "online", "student", "money", "hustle"],
+      "answer": "Low-cost ways students can start earning: 1) Freelance a skill you already have (writing, design, data entry) on sites like Fiverr or Upwork. 2) Sell a digital skill locally via WhatsApp status/status ads. 3) Affiliate marketing — promote products and earn commission. 4) Offer a service to fellow students (typing, tutoring, phone repairs). Start with what needs zero capital first."
+    },
+    {
+      "mode": "business",
+      "question": "How do I price my first gig",
+      "keywords": ["price", "pricing", "gig", "charge", "rate"],
+      "answer": "For your first gig: research what others charge for the same skill and start slightly below that to attract your first clients and reviews. Don't go too low — undervaluing makes it hard to raise prices later. As you gain reviews and experience, raise your price every few clients."
+    },
+    {
+      "mode": "general",
+      "question": "What can this bot do",
+      "keywords": ["what can you do", "help", "bukason", "features"],
+      "answer": "BUKASON helps with two things: Academics (JAMB/WAEC/NECO help, explaining school topics) and Business (low-capital ways to start earning as a student). Switch modes from the menu, and ask anything in plain language."
+    }
+  ]
+}

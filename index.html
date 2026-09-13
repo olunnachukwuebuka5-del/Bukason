@@ -424,6 +424,37 @@
         <input type="password" id="loginPassword" placeholder="••••••••" required/>
       </div>
       <button type="submit" class="auth-submit" id="loginBtn">Log In</button>
+      <div class="auth-switchline" style="margin-top:12px;">
+        <span id="forgotPasswordLink">Forgot password?</span>
+      </div>
+    </form>
+
+    <form id="resetForm" style="display:none;">
+      <div id="resetStep1">
+        <div class="auth-field">
+          <label>Email</label>
+          <input type="email" id="resetEmail" placeholder="you@gmail.com" required/>
+        </div>
+        <div class="auth-hint" style="margin-bottom:10px;">We'll email you a 6-digit code to reset your password.</div>
+        <button type="submit" class="auth-submit" id="resetBtn">Send code</button>
+      </div>
+      <div id="resetStep2" style="display:none;">
+        <div class="auth-field">
+          <label>Code from your email</label>
+          <input type="text" id="resetToken" placeholder="123456" inputmode="numeric" autocomplete="one-time-code"/>
+        </div>
+        <div class="auth-field">
+          <label>New password</label>
+          <input type="password" id="resetNewPassword" placeholder="At least 6 characters" minlength="6"/>
+        </div>
+        <button type="button" class="auth-submit" id="resetConfirmBtn">Set new password</button>
+        <div class="auth-hint" style="margin-top:8px;text-align:center;">
+          Didn't get a code? <span id="resendResetLink" style="color:var(--gold-soft);font-weight:600;cursor:pointer;">Resend</span>
+        </div>
+      </div>
+      <div class="auth-switchline" style="margin-top:12px;">
+        <span id="backToLoginFromReset">Back to Log In</span>
+      </div>
     </form>
 
     <form id="signupForm" style="display:none;">
@@ -548,9 +579,9 @@
   <div id="attachPreviewRow"></div>
   <div id="attachError"></div>
   <div id="inputRow">
-    <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" multiple hidden />
-    <button id="attachBtn" type="button" aria-label="Attach file">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5V7a2 2 0 0 0-2-2H8L4 9v8a2 2 0 0 0 2 2h6"/><path d="M16 16.5v3a2.5 2.5 0 0 0 5 0v-5a4 4 0 0 0-8 0v5"/></svg>
+    <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,.doc,.docx,.txt,.csv" multiple hidden />
+    <button id="attachBtn" type="button" aria-label="Attach photo or file">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
     </button>
     <button id="imageModeBtn" type="button" aria-label="Generate or edit an image" title="Generate / edit image">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
