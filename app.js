@@ -201,7 +201,7 @@ let bootTimeoutId = setTimeout(() => {
   }
 }, 15000); // generous timeout for slower mobile connections
 
-window.addEventListener('supabase-ready', async () => {
+async function handleSupabaseReady(){
   clearTimeout(bootTimeoutId);
   sb = window.supabaseClient;
   loginBtn.disabled = false;
@@ -215,14 +215,25 @@ window.addEventListener('supabase-ready', async () => {
   }catch(err){
     console.error('Session check failed:', err);
   }
-});
+}
 
-window.addEventListener('supabase-failed', (e) => {
+function handleSupabaseFailed(detail){
   clearTimeout(bootTimeoutId);
   loginBtn.disabled = false;
   signupBtn.disabled = false;
-  showAuthError('Login system failed to load: ' + (e.detail || 'unknown error') + '. Try reloading the page or switching networks.');
-});
+  showAuthError('Login system failed to load: ' + (detail || 'unknown error') + '. Try reloading the page or switching networks.');
+}
+
+// The head script (index.html) usually finishes BEFORE this file runs, so
+// check whether it already succeeded/failed before falling back to listeners.
+if (window.__bukasonSupabaseState === 'ready') {
+  handleSupabaseReady();
+} else if (window.__bukasonSupabaseState === 'failed') {
+  handleSupabaseFailed(window.__bukasonSupabaseError);
+} else {
+  window.addEventListener('supabase-ready', handleSupabaseReady);
+  window.addEventListener('supabase-failed', (e) => handleSupabaseFailed(e.detail));
+}
 
 // ---------------- Mode / menu ----------------
 function renderChips(){

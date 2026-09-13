@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-        <script>window.onerror = function(msg, url, line){ alert('JS ERROR: ' + msg + ' (line ' + line + ')'); };</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
 <title>BUKASON — AI Assistant</title>
@@ -29,9 +28,16 @@
         "https://hdjtjtkupxzhvfchfpjq.supabase.co",
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhkanRqdGt1cHh6aHZmY2hmcGpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxMTAwNjIsImV4cCI6MjEwMjY4NjA2Mn0.45FAVT_EVwgtQyey7loJ2kldxjxfkJOzBje4UeJUdSk"
       );
+      // Head scripts run BEFORE app.js (loaded at the bottom of <body>), so
+      // by the time app.js adds its 'supabase-ready' listener, this event
+      // has often already fired and been missed. Setting a flag here lets
+      // app.js check "did this already happen?" instead of only listening.
+      window.__bukasonSupabaseState = 'ready';
       window.dispatchEvent(new Event('supabase-ready'));
     } catch (err) {
       console.error('Supabase client init failed:', err);
+      window.__bukasonSupabaseState = 'failed';
+      window.__bukasonSupabaseError = String(err && err.message || err);
       window.dispatchEvent(new CustomEvent('supabase-failed', { detail: String(err && err.message || err) }));
     }
   })();
