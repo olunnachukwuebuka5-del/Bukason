@@ -300,27 +300,35 @@ async function tryGeminiVision(apiKey, systemPrompt, history, attachments, log) 
     return { role: m.role === 'assistant' ? 'model' : 'user', parts };
   });
 
-  const model = 'gemini-2.5-flash-lite';
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-      body: JSON.stringify({ contents, system_instruction: { parts: [{ text: (systemPrompt || '') + visionGuard }] } })
-    });
-    if (!response.ok) {
-      const errBody = await response.text().catch(() => '');
-      log.push(`Gemini vision: HTTP ${response.status} ${errBody.slice(0, 130)}`);
-      return null;
+  // Try the models in order. Different models have separate quotas, and a
+  // retired model name should not stop image questions from working.
+  // Set GEMINI_VISION_MODEL in Netlify to put your own choice first.
+  const models = [process.env.GEMINI_VISION_MODEL, 'gemini-2.5-flash-lite', 'gemini-2.5-flash']
+    .filter((m, i, arr) => m && arr.indexOf(m) === i);
+
+  for (const model of models) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        body: JSON.stringify({ contents, system_instruction: { parts: [{ text: (systemPrompt || '') + visionGuard }] } })
+      });
+      if (!response.ok) {
+        const errBody = await response.text().catch(() => '');
+        log.push(`Gemini vision (${model}): HTTP ${response.status} ${errBody.slice(0, 130)}`);
+        continue;
+      }
+      const data = await response.json();
+      const text = data.candidates && data.candidates[0] && data.candidates[0].content &&
+        data.candidates[0].content.parts && data.candidates[0].content.parts.map(p => p.text || '').join('');
+      if (text) return text;
+      log.push(`Gemini vision (${model}): empty reply`);
+    } catch (e) {
+      log.push(`Gemini vision (${model}): ${e.message}`);
     }
-    const data = await response.json();
-    const text = data.candidates && data.candidates[0] && data.candidates[0].content &&
-      data.candidates[0].content.parts && data.candidates[0].content.parts.map(p => p.text || '').join('');
-    return text || null;
-  } catch (e) {
-    log.push(`Gemini vision: ${e.message}`);
-    return null;
   }
+  return null;
 }
 
 async function tryNvidia(apiKey, systemPrompt, history, log) {
