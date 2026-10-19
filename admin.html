@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>BUKASON Admin</title>
+<style>
+  :root {
+    --navy: #0A1830;
+    --navy-2: #12254A;
+    --line: #2A3F6B;
+    --gold: #D4A843;
+    --text: #EEF1F7;
+    --muted: #9AA8C4;
+    --ok: #6FCF97;
+    --bad: #FF8A80;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--navy); color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 520px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 22px; margin: 4px 0 4px; color: var(--gold); }
+  p.sub { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
+  label { display: block; margin: 16px 0 6px; font-size: 14px; color: var(--muted); }
+  input[type=text], input[type=password], input[type=number], select {
+    width: 100%; padding: 12px; border-radius: 10px; font-size: 16px;
+    background: var(--navy-2); color: var(--text); border: 1px solid var(--line);
+  }
+  input:focus, select:focus, button:focus-visible {
+    outline: 2px solid var(--gold); outline-offset: 2px;
+  }
+  .row { display: flex; gap: 12px; }
+  .row > div { flex: 1; }
+  .check { display: flex; gap: 10px; align-items: flex-start; margin-top: 16px; }
+  .check input { width: 22px; height: 22px; margin-top: 2px; accent-color: var(--gold); }
+  .check span { font-size: 14px; color: var(--text); }
+  .check small { display: block; color: var(--muted); }
+  button {
+    width: 100%; margin-top: 22px; padding: 14px; border: 0; border-radius: 10px;
+    background: var(--gold); color: var(--navy); font-size: 16px; font-weight: 700;
+  }
+  button:disabled { opacity: .55; }
+  #status { margin-top: 20px; padding: 12px 14px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--navy-2); display: none; }
+  #status.ok { border-color: var(--ok); }
+  #status.bad { border-color: var(--bad); color: var(--bad); }
+  ul { margin: 10px 0 0; padding-left: 20px; color: var(--muted); font-size: 14px; }
+  li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>BUKASON knowledge</h1>
+  <p class="sub">Gather information while you're online. Users' phones sync it automatically.</p>
+
+  <label for="key">Admin key</label>
+  <input id="key" type="password" autocomplete="off" placeholder="The ADMIN_KEY you set on Netlify">
+
+  <label for="topic">Topic to gather</label>
+  <input id="topic" type="text" placeholder="e.g. JAMB Chemistry: mole concept">
+
+  <div class="row">
+    <div>
+      <label for="count">How many entries</label>
+      <input id="count" type="number" min="1" max="15" value="6">
+    </div>
+    <div>
+      <label for="mode">Category</label>
+      <select id="mode">
+        <option value="academics">Academics</option>
+        <option value="business">Business</option>
+        <option value="general">General</option>
+      </select>
+    </div>
+  </div>
+
+  <label class="check">
+    <input id="web" type="checkbox">
+    <span>Use live web search
+      <small>Slower, but pulls current information. Leave off for stable school topics.</small>
+    </span>
+  </label>
+
+  <button id="go" type="button">Gather and save</button>
+
+  <div id="status" role="status" aria-live="polite"></div>
+</main>
+
+<script>
+(function () {
+  var keyEl = document.getElementById("key");
+  var topicEl = document.getElementById("topic");
+  var countEl = document.getElementById("count");
+  var modeEl = document.getElementById("mode");
+  var webEl = document.getElementById("web");
+  var goEl = document.getElementById("go");
+  var statusEl = document.getElementById("status");
+
+  // Remember the key for this browser tab only.
+  try { keyEl.value = sessionStorage.getItem("bukason_admin_key") || ""; } catch (e) {}
+
+  function show(kind, html) {
+    statusEl.className = kind;
+    statusEl.innerHTML = html;
+    statusEl.style.display = "block";
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  goEl.addEventListener("click", async function () {
+    var key = keyEl.value.trim();
+    var topic = topicEl.value.trim();
+    if (!key) return show("bad", "Enter your admin key.");
+    if (topic.length < 3) return show("bad", "Type a topic first.");
+
+    try { sessionStorage.setItem("bukason_admin_key", key); } catch (e) {}
+
+    goEl.disabled = true;
+    show("", webEl.checked
+      ? "Searching the web and writing entries. This can take up to a minute..."
+      : "Writing entries...");
+
+    try {
+      var res = await fetch("/.netlify/functions/gather", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-key": key },
+        body: JSON.stringify({
+          topic: topic,
+          count: parseInt(countEl.value, 10) || 6,
+          mode: modeEl.value,
+          useWeb: webEl.checked
+        })
+      });
+
+      var data = await res.json().catch(function () { return {}; });
+      if (!res.ok) return show("bad", esc(data.error || ("Failed with status " + res.status)));
+
+      var list = (data.questions || []).map(function (q) { return "<li>" + esc(q) + "</li>"; }).join("");
+      show("ok",
+        "<strong>Saved " + data.added + " new</strong>" +
+        (data.skippedDuplicates ? " (" + data.skippedDuplicates + " already existed)" : "") +
+        "<div style='color:var(--muted);font-size:14px'>Written by " + esc(data.provider || "AI") +
+        (data.webRequested && !data.webUsed ? ". Web search was not available, so these come from the AI's own knowledge." : "") +
+        "</div>" +
+        (list ? "<ul>" + list + "</ul>" : ""));
+    } catch (err) {
+      show("bad", "Could not reach the server. Check your connection and that this page is on your deployed Netlify site.");
+    } finally {
+      goEl.disabled = false;
+    }
+  });
+})();
+</script>
+</body>
+</html>
