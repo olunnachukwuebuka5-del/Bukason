@@ -24,13 +24,13 @@
   button{ font-family:inherit; }
 
   /* ---------- Login page ---------- */
-  #loginScreen{
+  #loginScreen, #resetScreen{
     position:absolute; inset:0; z-index:50;
     background:linear-gradient(165deg, var(--navy) 0%, var(--navy-deep) 100%);
     display:flex; flex-direction:column; align-items:center; justify-content:center;
     padding:32px 26px; color:#fff;
   }
-  #loginScreen.hidden{ display:none; }
+  #loginScreen.hidden, #resetScreen.hidden{ display:none; }
   .login-mark{ width:72px; height:72px; border-radius:18px; background:var(--gold); overflow:hidden;
     display:flex; align-items:center; justify-content:center; margin-bottom:14px; }
   .login-mark img{ width:100%; height:100%; object-fit:cover; }
@@ -50,6 +50,7 @@
   }
   .login-switch{ text-align:center; font-size:12.5px; color:#9FB0D1; margin-top:16px; }
   .login-switch span{ color:var(--gold-soft); font-weight:600; cursor:pointer; }
+  .login-guest.hidden{ display:none; }
   .login-guest{ text-align:center; font-size:12px; color:#7C8BAD; margin-top:10px; cursor:pointer; text-decoration:underline; }
 
   /* ---------- Header ---------- */
@@ -85,7 +86,12 @@
   .bubble{ padding:11px 14px; border-radius:16px; font-size:14.5px; line-height:1.5; white-space:pre-wrap; }
   .msg.user .bubble{ background:var(--navy); color:#fff; border-bottom-right-radius:5px; }
   .msg.bot .bubble{ background:var(--card); border:1px solid var(--line); color:var(--ink); border-bottom-left-radius:5px; }
-  .msg-source{ font-size:11px; color:var(--sub); margin-top:4px; }
+  .msg-source{ font-size:11px; color:var(--sub); margin-top:4px; -webkit-user-select:none; user-select:none; }
+  /* Each message is its own read-only text box, so "Select all" only selects that one message. */
+  .bubble{ -webkit-user-select:text; user-select:text; caret-color:transparent; outline:none; -webkit-tap-highlight-color:transparent; }
+  .msg-actions{ display:flex; gap:10px; align-items:center; margin-top:4px; }
+  .copy-btn{ background:none; border:0; padding:2px 0; font:inherit; font-size:11.5px; color:var(--sub); cursor:pointer; text-decoration:underline; }
+  .attach-detail{ display:block; margin-top:8px; font-size:11.5px; color:var(--sub); }
   .attach-chip{
     display:flex; align-items:center; gap:6px; font-size:12px; background:rgba(255,255,255,0.15);
     padding:5px 9px; border-radius:8px; margin-bottom:6px;
@@ -155,6 +161,7 @@
   <div class="login-sub">Scientia Potentia Est</div>
 
   <div class="login-form">
+    <input type="text" id="signupName" placeholder="Your name" autocomplete="name" style="display:none">
     <input type="email" id="loginEmail" placeholder="Email address" autocomplete="email">
     <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password">
     <div class="login-error" id="loginError"></div>
@@ -164,7 +171,18 @@
   <div class="login-switch">
     <span id="authToggle">Don't have an account? Sign up</span>
   </div>
-  <div class="login-guest" id="guestContinue">Continue without an account</div>
+  <div class="login-guest" id="forgotPassword">Forgot password?</div>
+</div>
+
+<div id="resetScreen" class="hidden">
+  <div class="login-title">Choose a new password</div>
+  <div class="login-sub">Scientia Potentia Est</div>
+  <div class="login-form">
+    <input type="password" id="newPassword" placeholder="New password (6+ characters)" autocomplete="new-password">
+    <input type="password" id="newPassword2" placeholder="Type it again" autocomplete="new-password">
+    <div class="login-error" id="resetError"></div>
+    <button class="login-btn" id="resetSubmit">Save new password</button>
+  </div>
 </div>
 
 <!-- ================= MAIN APP ================= -->
@@ -227,9 +245,9 @@
     <button class="sheet-close" id="settingsClose" aria-label="Close">✕</button>
     <div class="sheet-title">Settings</div>
     <div class="sheet-row"><span>Signed in as</span><span class="lbl" id="settingsEmail">Guest</span></div>
-    <div class="sheet-row"><span>Offline answers saved</span><span class="lbl" id="settingsPackCount">–</span></div>
+    <div class="sheet-row" style="display:none"><span>Offline answers saved</span><span class="lbl" id="settingsPackCount">–</span></div>
     <div class="sheet-row"><span>Questions waiting to sync</span><span class="lbl" id="settingsQueueCount">–</span></div>
-    <div class="sheet-row"><span>Knowledge from BUKASON</span><span class="lbl" id="settingsKnowledgeCount">–</span></div>
+    <div class="sheet-row" style="display:none"><span>Knowledge from BUKASON</span><span class="lbl" id="settingsKnowledgeCount">–</span></div>
     <button class="sheet-btn" id="syncNowBtn" style="margin-bottom:8px">Sync now</button>
     <button class="sheet-btn danger" id="clearMemoryBtn">Clear offline memory</button>
     <button class="sheet-btn" id="logoutBtn">Log out</button>
@@ -352,11 +370,30 @@ function tokenize(text) {
     .filter(Boolean);
 }
 
+// Filler words must not count as a match: otherwise "what is a noun"
+// would match "what is a mole" just because of "what is a".
+const STOPWORDS = new Set((
+  "a an the is are was were be been am do does did of to in on at for with and or but if so as by from " +
+  "it its this that these those what which who whom whose how why when where can could should would " +
+  "will shall may might must i me my we our you your he she they them his her their there here than " +
+  "then about into out up down over under not no yes please tell explain describe give define mean meaning"
+).split(" "));
+
+function contentTokens(text) {
+  const all = tokenize(text);
+  const real = all.filter(t => !STOPWORDS.has(t));
+  return real.length ? real : all;
+}
+
+// Lets the saved-knowledge index split words exactly like the scorer does.
+if (window.BukasonKnowledge && window.BukasonKnowledge.setTokenizer) {
+  window.BukasonKnowledge.setTokenizer(contentTokens);
+}
+
 function scoreEntry(queryTokens, entry) {
-  const entryTokens = new Set([
-    ...tokenize(entry.question),
-    ...tokenize((entry.keywords || []).join(" "))
-  ]);
+  const entryTokens = new Set(
+    contentTokens((entry.question || "") + " " + (entry.keywords || []).join(" "))
+  );
   if (entryTokens.size === 0 || queryTokens.length === 0) return 0;
 
   let hits = 0;
@@ -366,20 +403,23 @@ function scoreEntry(queryTokens, entry) {
   return hits / queryTokens.length;
 }
 
-function allEntries() {
-  const server = (window.BukasonKnowledge && window.BukasonKnowledge.getEntries()) || [];
+// Only entries that share a word with the question are scored, so
+// answering stays fast however many entries are saved.
+function candidateEntries(queryTokens) {
+  const k = window.BukasonKnowledge;
+  const server = k && k.candidates ? k.candidates(queryTokens) : [];
   return server.concat(pack.entries);
 }
 
 function findBestMatch(question) {
   if (!pack || !Array.isArray(pack.entries)) return null;
-  const queryTokens = tokenize(question);
+  const queryTokens = contentTokens(question);
   if (!queryTokens.length) return null;
 
   let best = null;
   let bestScore = 0;
 
-  for (const entry of allEntries()) {
+  for (const entry of candidateEntries(queryTokens)) {
     const score = scoreEntry(queryTokens, entry);
     if (score > bestScore) {
       bestScore = score;
@@ -394,6 +434,8 @@ function findBestMatch(question) {
 
 async function reply(question) {
   if (!isReady()) throw new Error("OFFLINE_PACK_NOT_READY");
+  // Wait for the saved knowledge to finish loading from the phone.
+  if (window.BukasonKnowledge && window.BukasonKnowledge.ready) await window.BukasonKnowledge.ready;
 
   const match = findBestMatch(question);
   if (!match) throw new Error("NO_OFFLINE_MATCH");
@@ -454,9 +496,7 @@ function learn(question, answer) {
 }
 
 function learnedCount() {
-  const local = pack && Array.isArray(pack.entries) ? pack.entries.length : 0;
-  const server = window.BukasonKnowledge ? window.BukasonKnowledge.count() : 0;
-  return local + server;
+  return pack && Array.isArray(pack.entries) ? pack.entries.length : 0;
 }
 
 // ---------- Step 4: queue anything we couldn't answer ----------
@@ -521,7 +561,13 @@ const loginPassword = document.getElementById("loginPassword");
 const loginError    = document.getElementById("loginError");
 const loginSubmit   = document.getElementById("loginSubmit");
 const authToggle    = document.getElementById("authToggle");
-const guestContinue = document.getElementById("guestContinue");
+const forgotPassword = document.getElementById("forgotPassword");
+const signupName = document.getElementById("signupName");
+const resetScreen = document.getElementById("resetScreen");
+const newPassword = document.getElementById("newPassword");
+const newPassword2 = document.getElementById("newPassword2");
+const resetError = document.getElementById("resetError");
+const resetSubmit = document.getElementById("resetSubmit");
 
 const chatEl = document.getElementById("chat");
 const introEl = document.getElementById("intro");
@@ -570,9 +616,31 @@ const logoutBtn = document.getElementById("logoutBtn");
 // and isn't tied to any identity, so it's private by not existing
 // anywhere else, not by a login check.
 
+// Tells the server how much knowledge this account's phone holds, so the
+// admin page can show it. Users never see this number.
+let lastDeviceReport = "";
+async function reportDeviceSync() {
+  try {
+    const k = window.BukasonKnowledge;
+    if (!k || !currentUser || !navigator.onLine) return;
+    await k.ready;
+    const entries = k.count();
+    const syncedAt = k.lastSuccessAt();
+    const key = entries + "|" + syncedAt;
+    if (key === lastDeviceReport) return;
+    const { error } = await supabaseClient.from("device_sync").upsert(
+      { user_id: currentUser.id, entries: entries, last_synced_at: syncedAt, updated_at: new Date().toISOString() },
+      { onConflict: "user_id" }
+    );
+    if (!error) lastDeviceReport = key;
+  } catch (e) { /* reporting must never disturb the app */ }
+}
+window.addEventListener("bukason-knowledge-synced", reportDeviceSync);
+
 function showApp() {
   loginScreen.classList.add("hidden");
   settingsEmail.textContent = currentUser ? currentUser.email : "Guest";
+  reportDeviceSync();
 }
 
 function showLogin() {
@@ -588,12 +656,20 @@ authToggle.addEventListener("click", () => {
   loginSubmit.textContent = authMode === "login" ? "Log in" : "Sign up";
   authToggle.textContent = authMode === "login" ? "Don't have an account? Sign up" : "Already have an account? Log in";
   loginError.textContent = "";
+  signupName.style.display = authMode === "signup" ? "block" : "none";
+  forgotPassword.classList.toggle("hidden", authMode === "signup");
 });
 
 loginSubmit.addEventListener("click", async () => {
   const email = loginEmail.value.trim();
   const password = loginPassword.value;
 
+  const fullName = signupName.value.trim();
+  if (authMode === "signup" && fullName.length < 2) {
+    loginError.style.color = "";
+    loginError.textContent = "Enter your name.";
+    return;
+  }
   if (!email || !email.includes("@")) {
     loginError.textContent = "Enter a valid email address.";
     return;
@@ -615,7 +691,7 @@ loginSubmit.addEventListener("click", async () => {
       isGuest = false;
       showApp();
     } else {
-      const { data, error } = await supabaseClient.auth.signUp({ email, password });
+      const { data, error } = await supabaseClient.auth.signUp({ email, password, options: { data: { full_name: fullName } } });
       if (error) throw error;
 
       if (data.session) {
@@ -631,6 +707,8 @@ loginSubmit.addEventListener("click", async () => {
         loginTitle.textContent = "Welcome to BUKASON";
         loginSubmit.textContent = "Log in";
         authToggle.textContent = "Don't have an account? Sign up";
+        signupName.style.display = "none";
+        forgotPassword.classList.remove("hidden");
       }
     }
   } catch (err) {
@@ -644,11 +722,57 @@ loginSubmit.addEventListener("click", async () => {
   }
 });
 
-guestContinue.addEventListener("click", () => {
-  currentUser = null;
-  isGuest = true;
-  localStorage.setItem(GUEST_KEY, "1");
-  showApp();
+forgotPassword.addEventListener("click", async () => {
+  const email = loginEmail.value.trim();
+  loginError.style.color = "";
+  if (!email || !email.includes("@")) {
+    loginError.textContent = "Type your email above first, then tap Forgot password.";
+    return;
+  }
+  loginError.style.color = "";
+  loginError.textContent = "Sending...";
+  try {
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: location.origin + "/" });
+    if (error) throw error;
+    loginError.style.color = "#8fd19e";
+    loginError.textContent = "If that email has an account, a reset link is on its way. Check your inbox and spam folder.";
+  } catch (err) {
+    loginError.style.color = "";
+    loginError.textContent = err.message || "Could not send the email. Try again in a few minutes.";
+  }
+});
+
+// The reset link in the email brings the person back here signed in
+// temporarily; Supabase announces it with PASSWORD_RECOVERY.
+supabaseClient.auth.onAuthStateChange((event) => {
+  if (event === "PASSWORD_RECOVERY") {
+    resetError.textContent = "";
+    resetScreen.classList.remove("hidden");
+  }
+});
+
+resetSubmit.addEventListener("click", async () => {
+  resetError.style.color = "";
+  if (newPassword.value.length < 6) { resetError.textContent = "Password must be at least 6 characters."; return; }
+  if (newPassword.value !== newPassword2.value) { resetError.textContent = "The two passwords don't match."; return; }
+
+  resetSubmit.disabled = true;
+  resetError.textContent = "";
+  try {
+    const { error } = await supabaseClient.auth.updateUser({ password: newPassword.value });
+    if (error) throw error;
+    const { data } = await supabaseClient.auth.getSession();
+    currentUser = data.session ? data.session.user : null;
+    newPassword.value = "";
+    newPassword2.value = "";
+    resetScreen.classList.add("hidden");
+    history.replaceState(null, "", location.pathname);
+    if (currentUser) showApp(); else showLogin();
+  } catch (err) {
+    resetError.textContent = err.message || "Could not save the new password. Try the link again.";
+  } finally {
+    resetSubmit.disabled = false;
+  }
 });
 
 logoutBtn.addEventListener("click", async () => {
@@ -668,10 +792,8 @@ logoutBtn.addEventListener("click", async () => {
     currentUser = data.session.user;
     isGuest = false;
     showApp();
-  } else if (localStorage.getItem(GUEST_KEY) === "1") {
-    isGuest = true;
-    showApp();
   } else {
+    localStorage.removeItem(GUEST_KEY); // guest mode no longer exists
     showLogin();
   }
 })();
@@ -876,16 +998,27 @@ settingsOverlay.addEventListener("click", (e) => { if (e.target === settingsOver
 
 syncNowBtn.addEventListener("click", async () => {
   const k = window.BukasonKnowledge;
-  if (!k) { settingsKnowledgeCount.textContent = "Unavailable"; return; }
-  if (!navigator.onLine) { settingsKnowledgeCount.textContent = "You're offline"; return; }
+  const reset = (text) => { syncNowBtn.textContent = text; };
+  if (!k) { reset("Not available"); setTimeout(() => reset("Sync now"), 2000); return; }
+  if (!navigator.onLine) { reset("You're offline"); setTimeout(() => reset("Sync now"), 2000); return; }
   syncNowBtn.disabled = true;
-  syncNowBtn.textContent = "Syncing...";
+  reset("Checking...");
+  // On mobile data, a big download should be the person's choice.
+  if (k.isMetered && k.isMetered() && k.pending) {
+    const left = await k.pending();
+    if (left && left.approxMB > 3 &&
+        !confirm("About " + Math.round(left.approxMB) + " MB is waiting to download. You may be on mobile data. Download it now?")) {
+      syncNowBtn.disabled = false;
+      reset("Sync now");
+      return;
+    }
+  }
+  reset("Syncing...");
   const r = await k.sync(true);
   syncNowBtn.disabled = false;
-  syncNowBtn.textContent = "Sync now";
-  if (r && r.error) settingsKnowledgeCount.textContent = "Sync failed";
-  else showKnowledgeCount();
-  settingsPackCount.textContent = window.BukasonOfflineAI.learnedCount() + " saved";
+  reset(r && r.error ? "Sync failed. Try again" : "Up to date");
+  setTimeout(() => reset("Sync now"), 2500);
+  reportDeviceSync();
 });
 
 clearMemoryBtn.addEventListener("click", () => {
@@ -899,6 +1032,34 @@ clearMemoryBtn.addEventListener("click", () => {
 // ============================================================
 // RENDERING A MESSAGE
 // ============================================================
+
+function formatBotText(t) {
+  // Safe mini-formatter: **bold**, # headings and "- " bullets. HTML is escaped first.
+  return String(t)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/^\s{0,3}#{1,6}\s+(.+)$/gm, "<strong>$1</strong>")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/^(\s*)[-*]\s+/gm, "$1\u2022 ");
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (e) {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      ta.remove();
+      return ok;
+    } catch (e2) { return false; }
+  }
+}
 
 function addMessage(text, who, opts) {
   opts = opts || {};
@@ -916,21 +1077,57 @@ function addMessage(text, who, opts) {
     } else {
       const chip = document.createElement("div");
       chip.className = "attach-chip";
-      chip.textContent = "📎 " + opts.attachment.name;
+      chip.textContent = "\uD83D\uDCCE " + opts.attachment.name;
       wrap.appendChild(chip);
     }
   }
 
   const bubble = document.createElement("div");
   bubble.className = "bubble";
-  bubble.textContent = text;
+  if (who === "user") bubble.textContent = text;
+  else bubble.innerHTML = formatBotText(text);
+
+  // Make the bubble its own read-only text box. "Select all" inside an
+  // editable box selects only that box, so one message = one block.
+  bubble.setAttribute("contenteditable", "true");
+  bubble.setAttribute("inputmode", "none");
+  bubble.setAttribute("spellcheck", "false");
+  bubble.setAttribute("autocorrect", "off");
+  bubble.setAttribute("aria-readonly", "true");
+  const keep = bubble.innerHTML;
+  ["beforeinput", "paste", "cut", "drop"].forEach(ev => bubble.addEventListener(ev, e => e.preventDefault()));
+  bubble.addEventListener("input", () => { bubble.innerHTML = keep; });
   wrap.appendChild(bubble);
 
-  if (opts.sourceLabel) {
-    const src = document.createElement("div");
-    src.className = "msg-source";
-    src.textContent = opts.sourceLabel;
-    wrap.appendChild(src);
+  if (opts.detail) {
+    const d = document.createElement("span");
+    d.className = "attach-detail";
+    d.textContent = "Details: " + opts.detail;
+    bubble.appendChild(d);
+  }
+
+  if (opts.sourceLabel || who !== "user") {
+    const row = document.createElement("div");
+    row.className = "msg-actions";
+    if (opts.sourceLabel) {
+      const src = document.createElement("div");
+      src.className = "msg-source";
+      src.textContent = opts.sourceLabel;
+      row.appendChild(src);
+    }
+    if (who !== "user") {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "copy-btn";
+      btn.textContent = "Copy";
+      btn.addEventListener("click", async () => {
+        const ok = await copyText(bubble.innerText.replace(/\n?Details: .*$/s, "").trim());
+        btn.textContent = ok ? "Copied" : "Press and hold to copy";
+        setTimeout(() => { btn.textContent = "Copy"; }, 1600);
+      });
+      row.appendChild(btn);
+    }
+    wrap.appendChild(row);
   }
 
   chatEl.appendChild(wrap);
@@ -1009,7 +1206,7 @@ async function getOnlineAnswer(question, attachment) {
 
   if (attachment) {
     if (!currentUser) {
-      return "Please log in to send images or files. You can still ask text questions as a guest.";
+      return "Please log in again to send images or files.";
     }
     if (!attachment.file) {
       return "Please attach the file again.";
@@ -1061,6 +1258,10 @@ async function getOnlineAnswer(question, attachment) {
   if (!res.ok || !data || !data.text) {
     const e = new Error("chat failed: " + res.status);
     e.userMessage = (data && data.error) || "The AI is busy right now. Please try again in a moment.";
+    // Technical reason from the server, shown small so problems can be diagnosed.
+    if (data && Array.isArray(data.debug) && data.debug.length) {
+      e.detail = data.debug.join(" | ").slice(0, 400);
+    }
     throw e;
   }
 
@@ -1133,7 +1334,7 @@ async function sendMessage() {
         } catch (e) { /* no saved match */ }
       }
       if (!shown) {
-        addMessage((err && err.userMessage) || "Something went wrong. Please try again.", "bot");
+        addMessage((err && err.userMessage) || "Something went wrong. Please try again.", "bot", { detail: err && err.detail });
       }
     }
   } finally {

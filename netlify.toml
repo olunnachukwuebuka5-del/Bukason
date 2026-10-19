@@ -7,3 +7,7 @@
   for = "/sw.js"
   [headers.values]
     Cache-Control = "no-cache"
+
+# Gathers knowledge by itself every 3 minutes (1 topic per run).
+[functions."auto-gather"]
+  schedule = "*/3 * * * *"

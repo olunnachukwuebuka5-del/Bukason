@@ -11,9 +11,14 @@ Offline, the app answers from the copy on the phone.
 | knowledge-sync.js | Pulls new knowledge from Supabase onto the phone |
 | sw.js | Lets the app open with no internet |
 | admin.html | Your page for gathering knowledge (needs your admin key) |
-| netlify/functions/gather.js | Server function that gathers and saves knowledge |
-| netlify/functions/chat.js | Your existing multi-provider AI chat function (unchanged) |
+| netlify/functions/gather.js | Admin endpoint: stats, users, topic queue, manual gather |
+| netlify/functions/auto-gather.js | Runs every 3 minutes and gathers the next queued topic by itself |
+| netlify/lib/gather-core.js | Shared code used by both functions above |
+| netlify/functions/chat.js | Your chat function. Only change: image questions try 3 Gemini models instead of 1 |
 | setup-knowledge.sql | Creates the `knowledge` table in Supabase |
+| setup-phase3.sql | Index that makes the duplicate check fast |
+| setup-phase2.sql | Phone report table (admin sees each account's saved entries) and the pause switch |
+| setup-admin.sql | Creates the topic queue table for automatic gathering |
 | supabase-storage-policies.sql | Creates the private `attachments` bucket for image/PDF questions |
 | manifest.json, icon-192.png, icon-512.png | Install-to-home-screen files |
 | offline-knowledge.json | The 4 starter answers |
@@ -24,7 +29,10 @@ netlify.toml or offline-knowledge.json, you can keep yours.
 
 ## Setup (once)
 
-1. Supabase -> SQL Editor: run setup-knowledge.sql, then supabase-storage-policies.sql.
+1. Supabase -> SQL Editor: run setup-knowledge.sql, setup-admin.sql, setup-phase2.sql, setup-phase3.sql, then supabase-storage-policies.sql.
+   Also create the `messages` table if your project has none (see earlier chat).
+   Supabase -> Authentication -> URL Configuration: set Site URL to your live site
+   (https://bukasonchatsystem.netlify.app) so password-reset emails come back to the app.
 2. Upload every file here to the root of your GitHub repo
    (keep gather.js inside netlify/functions/).
 3. Netlify -> Site settings -> Environment variables. Add these:
@@ -62,3 +70,53 @@ netlify.toml or offline-knowledge.json, you can keep yours.
 - Supported: PNG, JPG, WEBP, GIF, HEIC and PDF (up to 15 MB). Word and text
   files are not supported by chat.js.
 - File questions are slower. If one times out, try a smaller file.
+
+## New in this version
+
+- Guest mode is gone. Everyone logs in. The login screen has Forgot password.
+- Sign-up asks for a name. The admin page lists names (older accounts show "no name given").
+- Each chat message is its own box: select-all inside it selects only that message.
+  Bot answers also have a Copy button. **bold** and bullets now display properly.
+- Admin page: registered people, knowledge count, topic queue, run-now button.
+- Automatic gathering: add topics once; the server takes 2 every 6 hours.
+- If an image question fails, the chat bubble now shows a small "Details:" line
+  from the server. Send that line to whoever is helping you debug.
+
+## General knowledge (all subjects)
+
+- The AI prompt is no longer limited to school or business. "General (any subject)"
+  is the default category, and the mixed starter list covers health basics,
+  technology, money, history, geography, culture, food, sports and more.
+- When the queue runs low, the server suggests new topics by itself, rotating
+  through about 20 subject areas. "Let the AI suggest new topics" does it on demand.
+- Automatic gathering pauses at 3,000 entries because each phone keeps a copy in
+  its storage. You can still gather manually past that.
+- For health, legal and money topics the AI is told to give general information
+  only. Read a sample of the entries in Supabase before relying on them.
+
+## Phase 2: unlimited phone storage, admin visibility, faster gathering
+
+- Phones now keep knowledge in IndexedDB (large browser storage) instead of localStorage,
+  so there is no 3,000 entry limit. Old saved knowledge moves over by itself.
+- A word index keeps offline answers fast however many entries are saved.
+- Matching ignores filler words ("what is a ..."), so unrelated questions no longer
+  get a wrong saved answer.
+- Users no longer see how many entries are stored. The admin page shows, for each
+  account, how many entries its phone holds and when it last synced.
+- Automatic gathering runs every 3 minutes (1 topic per run), with a Pause button on the admin page.
+  See Phase 3 below for how it slows down and stops.
+- Watch two limits: Supabase free database size (500 MB) and the size of a new
+  user's first sync. Both grow with the number of entries.
+
+## Phase 3: keeping the database and downloads small
+
+- Gathering speed follows how much is saved: every 3 minutes until AUTO_FAST_UNTIL
+  entries (default 10,000), about once an hour until AUTO_ENTRY_LIMIT (default 30,000),
+  then it stops. Set either number in Netlify to change it.
+- Near-duplicate questions ("Explain what rain is" vs "What is rain?") are skipped.
+  Run setup-phase3.sql once so the check stays fast.
+- Phones on mobile data (or when the connection type is unknown) download at most
+  about 1.5 MB a day automatically, oldest and most useful entries first, and carry on
+  the next day. On Wi-Fi the phone downloads everything. Sync now downloads everything
+  after asking if a big amount is left and the phone may be on mobile data.
+- Starter topics were gathered first, so new users receive them first.
