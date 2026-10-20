@@ -545,13 +545,68 @@ Return ONLY a JSON array of strings, no markdown.`;
   return { area: chosen, provider, suggested: list.length, added: added.added };
 }
 
-// Keeps the queue from ever running dry: when fewer than 2 topics wait,
-// the AI thinks up new ones for a random subject area.
+// ============================================================
+// What people searched for with no saved answer (table: search_demand)
+// ============================================================
+// Phones add anonymous key words (no name, email or account) only when the
+// person allowed it and nothing saved matched. The server turns words that
+// several people searched for into topics to gather.
+
+const DEMAND_DAYS = 14;
+
+function demandMin() { return parseInt(process.env.DEMAND_MIN, 10) || 2; }
+
+async function readDemand() {
+  const since = new Date(Date.now() - DEMAND_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const rows = await sbFetch(
+    "/rest/v1/search_demand?select=id,words&created_at=gte." + encodeURIComponent(since) +
+    "&order=created_at.desc&limit=3000"
+  );
+  const groups = new Map();
+  for (const r of rows || []) {
+    // "plants photosynthesis" and "photosynthesis plants" are the same search.
+    const key = String(r.words).toLowerCase().split(/\s+/).filter(Boolean).sort().join(" ");
+    if (!key) continue;
+    const g = groups.get(key) || { words: r.words, count: 0, ids: [] };
+    g.count++;
+    g.ids.push(r.id);
+    groups.set(key, g);
+  }
+  return Array.from(groups.values()).sort((a, b) => b.count - a.count);
+}
+
+async function topicsFromDemand() {
+  let groups;
+  try { groups = await readDemand(); } catch (e) { return { added: 0 }; }
+
+  const wanted = groups.filter(g => g.count >= demandMin()).slice(0, 5);
+  if (wanted.length) {
+    const res = await addTopics(wanted.map(g => g.words), "general", false);
+    const ids = wanted.flatMap(g => g.ids);
+    for (let i = 0; i < ids.length; i += 100) {
+      await sbFetch("/rest/v1/search_demand?id=in.(" + ids.slice(i, i + 100).join(",") + ")", { method: "DELETE" }).catch(() => {});
+    }
+    var added = res.added;
+  }
+
+  // Tidy: nothing is kept longer than 30 days.
+  const old = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  await sbFetch("/rest/v1/search_demand?created_at=lt." + encodeURIComponent(old), { method: "DELETE" }).catch(() => {});
+
+  return { added: added || 0 };
+}
+
+// Keeps the queue from ever running dry: when fewer than 2 topics wait, topics
+// people searched for come first, then the AI thinks up new ones.
 async function topUpQueue() {
   const waiting = await sbCount("/rest/v1/gather_topics?select=id&status=eq.pending");
   if (waiting >= 2) return { topped: false, waiting };
+
+  const d = await topicsFromDemand();
+  if (waiting + d.added >= 2) return { topped: true, waiting, fromSearches: d.added };
+
   const r = await suggestTopics();
-  return { topped: true, waiting, area: r.area, added: r.added };
+  return { topped: true, waiting, fromSearches: d.added, area: r.area, added: r.added };
 }
 
 // Small key/value settings table (admin_settings). Used for the pause switch.
@@ -644,7 +699,7 @@ async function getUsers() {
 }
 
 async function overview() {
-  const [users, knowledge, queue] = await Promise.all([
+  const [users, knowledge, queue, demand] = await Promise.all([
     getUsers().catch(e => ({ error: e.message })),
     sbCount("/rest/v1/knowledge?select=id").catch(() => null),
     (async () => {
@@ -655,9 +710,10 @@ async function overview() {
         sbFetch("/rest/v1/gather_topics?select=topic,status,added,provider,last_error&order=created_at.desc&limit=40")
       ]);
       return { pending, done, failed, recent };
-    })().catch(e => ({ error: e.message }))
+    })().catch(e => ({ error: e.message })),
+    readDemand().then(g => g.slice(0, 15).map(x => ({ words: x.words, count: x.count }))).catch(() => null)
   ]);
-  return { users, knowledge, queue, autoPaused: await autoPaused(), autoPlan: autoPlan(knowledge || 0) };
+  return { users, knowledge, queue, demand, autoPaused: await autoPaused(), autoPlan: autoPlan(knowledge || 0) };
 }
 
 module.exports = {
