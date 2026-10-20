@@ -6,7 +6,7 @@
 //   would crash offline when it tries to create the Supabase client.
 // - Live data (AI replies, Supabase calls) is never cached.
 
-const CACHE = "bukason-shell-v10";
+const CACHE = "bukason-shell-v11";
 
 const SHELL = [
   "./",

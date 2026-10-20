@@ -16,6 +16,7 @@ Offline, the app answers from the copy on the phone.
 | netlify/lib/gather-core.js | Shared code used by both functions above |
 | netlify/functions/chat.js | Your chat function. Only change: image questions try 3 Gemini models instead of 1 |
 | setup-knowledge.sql | Creates the `knowledge` table in Supabase |
+| setup-phase4.sql | Related-word search column and the anonymous search-words table |
 | setup-phase3.sql | Index that makes the duplicate check fast |
 | setup-phase2.sql | Phone report table (admin sees each account's saved entries) and the pause switch |
 | setup-admin.sql | Creates the topic queue table for automatic gathering |
@@ -29,7 +30,7 @@ netlify.toml or offline-knowledge.json, you can keep yours.
 
 ## Setup (once)
 
-1. Supabase -> SQL Editor: run setup-knowledge.sql, setup-admin.sql, setup-phase2.sql, setup-phase3.sql, then supabase-storage-policies.sql.
+1. Supabase -> SQL Editor: run setup-knowledge.sql, setup-admin.sql, setup-phase2.sql, setup-phase3.sql, setup-phase4.sql, then supabase-storage-policies.sql.
    Also create the `messages` table if your project has none (see earlier chat).
    Supabase -> Authentication -> URL Configuration: set Site URL to your live site
    (https://bukasonchatsystem.netlify.app) so password-reset emails come back to the app.
@@ -120,3 +121,27 @@ netlify.toml or offline-knowledge.json, you can keep yours.
   the next day. On Wi-Fi the phone downloads everything. Sync now downloads everything
   after asking if a big amount is left and the phone may be on mobile data.
 - Starter topics were gathered first, so new users receive them first.
+
+## Phase 4: entries follow what people search
+
+- When someone searches (online), their phone also downloads saved entries related to
+  those words, then entries related to the words those results use. Entries the phone
+  already holds are left out, so each search brings new ones. Related downloads on
+  mobile data are capped at about 400 KB a day; Wi-Fi is unlimited; Data saver stops them.
+  The AI's own answers are still saved on the phone too.
+- Anonymous search words: after login each person is asked once whether to share them
+  (Settings has a switch). If allowed, and no saved answer matched, only key words
+  (letters only, up to 6, no account, no name) are sent. Words that 2 or more people
+  searched are queued as topics automatically; the admin page lists them. Nothing is
+  kept longer than 30 days. Set DEMAND_MIN in Netlify to change the "2".
+- Run setup-phase4.sql once. It adds the search column and the table.
+
+## Install banner
+
+- Browsers cannot install an app silently. When the site opens, a banner offers
+  "Install BUKASON on your phone". One tap installs it and the icon appears on the home
+  screen within a few seconds. "Not now" hides it for a week.
+- Settings has an "Install app on this phone" button for anyone who dismissed it.
+- iPhones cannot be prompted by any website, so Safari users see the steps instead:
+  Share, then Add to Home Screen.
+- Nothing shows if the app is already installed.

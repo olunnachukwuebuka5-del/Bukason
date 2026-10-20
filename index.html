@@ -91,6 +91,20 @@
   .bubble{ -webkit-user-select:text; user-select:text; caret-color:transparent; outline:none; -webkit-tap-highlight-color:transparent; }
   .msg-actions{ display:flex; gap:10px; align-items:center; margin-top:4px; }
   .copy-btn{ background:none; border:0; padding:2px 0; font:inherit; font-size:11.5px; color:var(--sub); cursor:pointer; text-decoration:underline; }
+  #installCard{ position:fixed; left:12px; right:12px; top:12px; z-index:80; display:none; background:#0A1830; color:#fff;
+    border:1px solid #D4A843; border-radius:14px; padding:14px; box-shadow:0 8px 28px rgba(0,0,0,.4); font-size:13.5px; line-height:1.45; }
+  #installCard.show{ display:block; }
+  #installCard b{ display:block; font-size:15px; margin-bottom:4px; color:#D4A843; }
+  #installCard .row{ display:flex; gap:10px; margin-top:12px; }
+  #installCard button{ flex:1; padding:11px; border-radius:10px; border:1px solid #D4A843; font:inherit; font-weight:600; cursor:pointer; background:transparent; color:#D4A843; }
+  #installCard button.yes{ background:#D4A843; color:#0A1830; }
+  #consentCard{ position:fixed; left:12px; right:12px; bottom:88px; z-index:60; display:none; background:#fff; color:#0A1830;
+    border:1px solid #cfd6e4; border-radius:14px; padding:14px; box-shadow:0 8px 28px rgba(10,24,48,.28); font-size:13.5px; line-height:1.45; }
+  #consentCard.show{ display:block; }
+  #consentCard b{ display:block; font-size:15px; margin-bottom:4px; }
+  #consentCard .row{ display:flex; gap:10px; margin-top:12px; }
+  #consentCard button{ flex:1; padding:11px; border-radius:10px; border:1px solid #0A1830; font:inherit; font-weight:600; cursor:pointer; background:#fff; color:#0A1830; }
+  #consentCard button.yes{ background:#0A1830; color:#fff; }
   .attach-detail{ display:block; margin-top:8px; font-size:11.5px; color:var(--sub); }
   .attach-chip{
     display:flex; align-items:center; gap:6px; font-size:12px; background:rgba(255,255,255,0.15);
@@ -174,6 +188,18 @@
   <div class="login-guest" id="forgotPassword">Forgot password?</div>
 </div>
 
+<div id="installCard" role="dialog" aria-label="Install BUKASON">
+  <b>Install BUKASON on your phone</b>
+  <span id="installText">It opens like an app from your home screen and works without internet.</span>
+  <div class="row"><button id="installNo" type="button">Not now</button><button id="installYes" class="yes" type="button">Install</button></div>
+</div>
+
+<div id="consentCard" role="dialog" aria-label="Help BUKASON learn">
+  <b>Help BUKASON learn?</b>
+  When BUKASON has no saved answer for something you search, it can send just the key words, never your name, email, account or full question, so more of what people need gets added. You can change this any time in Settings.
+  <div class="row"><button id="consentNo" type="button">No thanks</button><button id="consentYes" class="yes" type="button">Allow</button></div>
+</div>
+
 <div id="resetScreen" class="hidden">
   <div class="login-title">Choose a new password</div>
   <div class="login-sub">Scientia Potentia Est</div>
@@ -249,6 +275,8 @@
     <div class="sheet-row"><span>Questions waiting to sync</span><span class="lbl" id="settingsQueueCount">–</span></div>
     <div class="sheet-row" style="display:none"><span>Knowledge from BUKASON</span><span class="lbl" id="settingsKnowledgeCount">–</span></div>
     <button class="sheet-btn" id="syncNowBtn" style="margin-bottom:8px">Sync now</button>
+    <button class="sheet-btn" id="shareBtn" style="margin-bottom:8px">Share search words: Off</button>
+    <button class="sheet-btn" id="installBtn" style="margin-bottom:8px;display:none">Install app on this phone</button>
     <button class="sheet-btn danger" id="clearMemoryBtn">Clear offline memory</button>
     <button class="sheet-btn" id="logoutBtn">Log out</button>
   </div>
@@ -521,7 +549,15 @@ function queueLength() { return getQueue().length; }
 
 // ---------- Expose everything app.js needs ----------
 
+// True if something saved already answers this question.
+async function hasMatch(question) {
+  if (window.BukasonKnowledge && window.BukasonKnowledge.ready) await window.BukasonKnowledge.ready;
+  return isReady() && !!findBestMatch(question);
+}
+
 window.BukasonOfflineAI = {
+  contentTokens,
+  hasMatch,
   init,
   reply,
   learn,
@@ -636,11 +672,57 @@ async function reportDeviceSync() {
   } catch (e) { /* reporting must never disturb the app */ }
 }
 window.addEventListener("bukason-knowledge-synced", reportDeviceSync);
+window.addEventListener("bukason-knowledge-researched", reportDeviceSync);
+
+// ---- search words: only with the person's permission ----
+const SHARE_KEY = "bukason_share_search"; // "yes" | "no" | missing = not asked yet
+
+function shareSearchOn() {
+  try { return localStorage.getItem(SHARE_KEY) === "yes"; } catch (e) { return false; }
+}
+function setShareSearch(on) {
+  try { localStorage.setItem(SHARE_KEY, on ? "yes" : "no"); } catch (e) {}
+  updateShareBtn();
+}
+function updateShareBtn() {
+  const btn = document.getElementById("shareBtn");
+  if (btn) btn.textContent = "Share search words: " + (shareSearchOn() ? "On" : "Off");
+}
+function maybeAskConsent() {
+  let asked = true;
+  try { asked = localStorage.getItem(SHARE_KEY) !== null; } catch (e) {}
+  if (asked || !currentUser) return;
+  setTimeout(() => document.getElementById("consentCard").classList.add("show"), 2000);
+}
+
+// Sends only key words (letters only, no numbers, at most 6), no account, and
+// only when nothing saved answered the search.
+async function logSearchDemand(question) {
+  try {
+    if (!shareSearchOn() || !currentUser || !navigator.onLine || !window.BukasonOfflineAI) return;
+    const words = window.BukasonOfflineAI.contentTokens(question)
+      .filter(w => /^[a-z]{3,24}$/.test(w)).slice(0, 6);
+    const text = words.join(" ");
+    if (text.length < 3 || text.length > 80) return;
+    await supabaseClient.from("search_demand").insert({ words: text });
+  } catch (e) { /* never disturb the chat */ }
+}
+
+// After an online answer: record the gap (if allowed) and pull related entries.
+function afterSearch(question, covered) {
+  try {
+    if (!covered) logSearchDemand(question);
+    const ai = window.BukasonOfflineAI;
+    const k = window.BukasonKnowledge;
+    if (k && k.research && ai) k.research(ai.contentTokens(question));
+  } catch (e) {}
+}
 
 function showApp() {
   loginScreen.classList.add("hidden");
   settingsEmail.textContent = currentUser ? currentUser.email : "Guest";
   reportDeviceSync();
+  maybeAskConsent();
 }
 
 function showLogin() {
@@ -991,10 +1073,22 @@ settingsBtn.addEventListener("click", () => {
     ? window.BukasonOfflineAI.learnedCount() + " saved" : "Not loaded yet";
   settingsQueueCount.textContent = window.BukasonOfflineAI ? window.BukasonOfflineAI.queueLength() : 0;
   showKnowledgeCount();
+  updateShareBtn();
+  updateInstallBtn();
   settingsOverlay.classList.add("show");
 });
 settingsClose.addEventListener("click", closeSettings);
 settingsOverlay.addEventListener("click", (e) => { if (e.target === settingsOverlay) closeSettings(); });
+
+document.getElementById("consentYes").addEventListener("click", () => {
+  setShareSearch(true);
+  document.getElementById("consentCard").classList.remove("show");
+});
+document.getElementById("consentNo").addEventListener("click", () => {
+  setShareSearch(false);
+  document.getElementById("consentCard").classList.remove("show");
+});
+document.getElementById("shareBtn").addEventListener("click", () => setShareSearch(!shareSearchOn()));
 
 syncNowBtn.addEventListener("click", async () => {
   const k = window.BukasonKnowledge;
@@ -1292,12 +1386,17 @@ async function sendMessage() {
   let answered = false;
   try {
     if (!isEffectivelyOffline()) {
+      // Is something saved already answering this? (checked before the new answer is saved)
+      const covered = (question && !attachment && window.BukasonOfflineAI)
+        ? await window.BukasonOfflineAI.hasMatch(question).catch(() => true)
+        : true;
       const answer = await getOnlineAnswer(question, attachment);
       addMessage(answer, "bot");
       answered = true;
       await logHistory({ question, answer, source: "online", ts: Date.now() });
       if (question && !attachment && window.BukasonOfflineAI) {
         window.BukasonOfflineAI.learn(question, answer);
+        afterSearch(question, covered);
       }
     } else {
       const offlineAI = window.BukasonOfflineAI;
@@ -1353,6 +1452,81 @@ inputEl.addEventListener("input", () => {
   inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + "px";
 });
 
+
+// ---- Install prompt ----
+// Browsers never install an app silently. What we can do is offer it the moment
+// the person opens the site, so one tap installs it and the icon appears on the
+// home screen within a few seconds.
+let installPrompt = null;
+const INSTALL_DISMISS_KEY = "bukason_install_dismissed";
+
+function isStandalone() {
+  return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
+}
+function isIOS() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+}
+function installDismissedRecently() {
+  try {
+    const t = parseInt(localStorage.getItem(INSTALL_DISMISS_KEY), 10);
+    return !!t && Date.now() - t < 7 * 24 * 60 * 60 * 1000; // ask again after a week
+  } catch (e) { return false; }
+}
+function canOfferInstall() {
+  return !isStandalone() && (!!installPrompt || isIOS());
+}
+function updateInstallBtn() {
+  const btn = document.getElementById("installBtn");
+  if (btn) btn.style.display = canOfferInstall() ? "block" : "none";
+}
+function showInstallCard(force) {
+  if (!canOfferInstall()) return;
+  if (!force && installDismissedRecently()) return;
+  const text = document.getElementById("installText");
+  const yes = document.getElementById("installYes");
+  if (!installPrompt && isIOS()) {
+    text.textContent = "Tap the Share button at the bottom of Safari, then choose Add to Home Screen.";
+    yes.style.display = "none";
+  } else {
+    text.textContent = "It opens like an app from your home screen and works without internet.";
+    yes.style.display = "";
+  }
+  document.getElementById("installCard").classList.add("show");
+}
+function hideInstallCard() {
+  document.getElementById("installCard").classList.remove("show");
+}
+async function runInstall() {
+  if (!installPrompt) { showInstallCard(true); return; }
+  const promptEvent = installPrompt;
+  installPrompt = null; // an install prompt can only be used once
+  hideInstallCard();
+  try {
+    promptEvent.prompt();
+    await promptEvent.userChoice;
+  } catch (e) {}
+  updateInstallBtn();
+}
+
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();               // keep it so we can show our own banner
+  installPrompt = e;
+  setTimeout(() => showInstallCard(false), 2500);
+  updateInstallBtn();
+});
+window.addEventListener("appinstalled", () => {
+  installPrompt = null;
+  hideInstallCard();
+  updateInstallBtn();
+});
+document.getElementById("installYes").addEventListener("click", runInstall);
+document.getElementById("installBtn").addEventListener("click", runInstall);
+document.getElementById("installNo").addEventListener("click", () => {
+  try { localStorage.setItem(INSTALL_DISMISS_KEY, String(Date.now())); } catch (e) {}
+  hideInstallCard();
+});
+// iPhones never fire the prompt event, so show the how-to steps instead.
+if (isIOS() && !isStandalone()) setTimeout(() => showInstallCard(false), 4000);
 
 // Lets the app open with no internet (works once deployed over https).
 if ("serviceWorker" in navigator && location.protocol.indexOf("http") === 0) {

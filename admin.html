@@ -111,6 +111,12 @@
       <div id="status" class="msg" role="status"></div>
     </section>
 
+    <section id="demandBox" hidden>
+      <h2>Searched, but nothing saved</h2>
+      <p class="sub" style="margin:0">Key words people searched when no saved answer matched, grouped, last 14 days. Only people who allowed it are counted, and no names are kept. Words searched by 2 or more people are queued as topics automatically when the queue runs low.</p>
+      <ul id="demandList" class="list"></ul>
+    </section>
+
     <section>
       <h2>Registered people</h2>
       <p class="sub" style="margin:0">Names, join dates and how many entries each account's phone holds. Open Supabase for emails. If one account uses two phones, the most recent report shows.</p>
@@ -186,6 +192,12 @@
     $("sAuto").textContent = label;
     $("sAuto").style.color = (paused || plan.mode === "stopped") ? "var(--bad)" : "var(--ok)";
     $("toggleAuto").textContent = paused ? "Resume automatic gathering" : "Pause automatic gathering";
+
+    var dem = o.demand;
+    $("demandBox").hidden = dem === null || dem === undefined;
+    if (dem) $("demandList").innerHTML = dem.length
+      ? dem.map(function (d) { return "<li><span>" + esc(d.words) + "</span><small>" + d.count + (d.count === 1 ? " search" : " searches") + "</small></li>"; }).join("")
+      : "<li>Nothing yet.</li>";
 
     if (u.error) $("userList").innerHTML = "<li>Could not load users: " + esc(u.error) + "</li>";
     else if (!u.list.length) $("userList").innerHTML = "<li>No one has registered yet.</li>";

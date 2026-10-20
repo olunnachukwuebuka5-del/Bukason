@@ -22,6 +22,8 @@
   var PAGE_SIZE_METERED = 200;
   var DAILY_BYTES_METERED = 1.5 * 1024 * 1024; // automatic download per day off Wi-Fi
   var APPROX_BYTES_PER_ENTRY = 700;
+  var RESEARCH_BYTES_METERED = 400 * 1024; // related-entry downloads per day off Wi-Fi
+  var RESEARCH_GAP_MS = 10 * 60 * 1000;    // the same search words are not fetched twice within this time
   var MIN_GAP_MS = 2 * 60 * 1000; // auto-sync at most every 2 minutes
   var TIMEOUT_MS = 20000;
 
@@ -31,7 +33,7 @@
   var db = null;
   var tokenizer = null;
   var index = null;          // word -> entries that contain it
-  var daily = { day: "", bytes: 0 }; // data used today by automatic syncing
+  var daily = { day: "", bytes: 0, rbytes: 0 }; // data used today (bytes: syncing, rbytes: searches)
   var lastAttempt = 0;
   var syncing = null;
 
@@ -149,11 +151,33 @@
   function today() { return new Date().toISOString().slice(0, 10); }
 
   function usedToday() { return daily.day === today() ? daily.bytes : 0; }
+  function researchUsedToday() { return daily.day === today() ? (daily.rbytes || 0) : 0; }
 
-  function addBytes(n) {
+  function rollDay() {
     var t = today();
-    if (daily.day !== t) daily = { day: t, bytes: 0 };
-    daily.bytes += n;
+    if (daily.day !== t) daily = { day: t, bytes: 0, rbytes: 0 };
+  }
+  function addBytes(n) { rollDay(); daily.bytes += n; }
+  function addResearchBytes(n) { rollDay(); daily.rbytes = (daily.rbytes || 0) + n; }
+
+  function toEntry(row) {
+    return {
+      id: row.id, mode: row.mode, question: row.question,
+      keywords: row.keywords || [], answer: row.answer, updated_at: row.updated_at
+    };
+  }
+
+  // Put rows in memory and the search index. Returns how many were new or changed.
+  function mergeRows(clean) {
+    var changed = 0;
+    clean.forEach(function (e) {
+      var before = byId.get(e.id);
+      if (!before || before.updated_at !== e.updated_at) changed++;
+      byId.set(e.id, e);
+      if (before) index = null;   // an edited answer: rebuild the index lazily
+      else indexAdd(e);
+    });
+    return changed;
   }
 
   function configReady() {
@@ -198,20 +222,8 @@
       if (!Array.isArray(rows)) throw new Error("Unexpected sync reply.");
       if (!rows.length) break;
 
-      var clean = rows.map(function (row) {
-        return {
-          id: row.id, mode: row.mode, question: row.question,
-          keywords: row.keywords || [], answer: row.answer, updated_at: row.updated_at
-        };
-      });
-
-      clean.forEach(function (e) {
-        var before = byId.get(e.id);
-        if (!before || before.updated_at !== e.updated_at) changed++;
-        byId.set(e.id, e);
-        if (before) index = null;   // an edited answer: rebuild the index lazily
-        else indexAdd(e);
-      });
+      var clean = rows.map(toEntry);
+      changed += mergeRows(clean);
 
       var newCursor = clean[clean.length - 1].updated_at;
       var stuck = newCursor === cursor;
@@ -269,6 +281,120 @@
     } catch (e) { return null; }
   }
 
+  // ---------- search-triggered download ("research") ----------
+  // When someone searches, the phone also pulls the saved entries related to
+  // those words, then entries related to the words those results use. So the
+  // phone's copy grows toward whatever the person is exploring.
+
+  var researching = false;
+  var recentResearch = {};
+
+  function splitWords(text) {
+    var all = tokenizer ? tokenizer(text) : String(text || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/);
+    return all.filter(function (w) { return /^[a-z0-9]{3,30}$/.test(w); });
+  }
+
+  function rank(rows, words) {
+    var scored = rows.map(function (e) {
+      var have = new Set(splitWords(entryText(e)));
+      var hits = 0;
+      words.forEach(function (w) { if (have.has(w)) hits++; });
+      return { e: e, hits: hits };
+    });
+    scored.sort(function (a, b) { return b.hits - a.hits; });
+    return scored.map(function (x) { return x.e; });
+  }
+
+  // Words the best results are tagged with, excluding what was searched.
+  function relatedWords(rows, exclude) {
+    var skip = new Set(exclude);
+    var counts = {};
+    rows.slice(0, 3).forEach(function (e) {
+      splitWords((e.keywords || []).join(" ")).forEach(function (w) {
+        if (!skip.has(w)) counts[w] = (counts[w] || 0) + 1;
+      });
+    });
+    return Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; }).slice(0, 5);
+  }
+
+  // Entries this phone already holds for these words. They are left out of
+  // the request, so every search brings NEW related entries, not repeats.
+  function heldIds(words) {
+    if (!tokenizer) return [];
+    ensureIndex();
+    var ids = [];
+    var seenIds = {};
+    words.forEach(function (w) {
+      (index.get(w) || []).forEach(function (e) {
+        if (!seenIds[e.id] && ids.length < 60) { seenIds[e.id] = true; ids.push(e.id); }
+      });
+    });
+    return ids;
+  }
+
+  async function fetchRelated(words, limit) {
+    var held = heldIds(words).filter(function (id) { return /^[A-Za-z0-9-]{8,64}$/.test(id); });
+    var url = SUPABASE_URL + "/rest/v1/knowledge" +
+      "?select=id,mode,question,keywords,answer,updated_at" +
+      "&search_vec=" + encodeURIComponent("fts(english)." + words.join("|")) +
+      (held.length ? "&id=" + encodeURIComponent("not.in.(" + held.join(",") + ")") : "") +
+      "&limit=" + limit;
+    var res = await fetchWithTimeout(url, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: "Bearer " + SUPABASE_ANON_KEY }
+    });
+    if (!res.ok) throw new Error("Related search failed (status " + res.status + ")");
+    var text = await res.text();
+    addResearchBytes(text.length);
+    var rows = JSON.parse(text);
+    return Array.isArray(rows) ? rows.map(toEntry) : [];
+  }
+
+  function overResearchBudget() {
+    return isMetered() && researchUsedToday() >= RESEARCH_BYTES_METERED;
+  }
+
+  async function research(tokens) {
+    try {
+      await ready;
+      if (researching) return { skipped: "busy" };
+      if (!configReady() || !navigator.onLine || dataSaverOn()) return { skipped: "unavailable" };
+
+      var seen = {};
+      var words = (tokens || []).filter(function (w) {
+        if (!/^[a-z0-9]{3,30}$/.test(w) || seen[w]) return false;
+        seen[w] = true; return true;
+      }).slice(0, 6);
+      if (!words.length) return { skipped: "no-words" };
+
+      var key = words.slice().sort().join(" ");
+      if (recentResearch[key] && Date.now() - recentResearch[key] < RESEARCH_GAP_MS) return { skipped: "recent" };
+      if (overResearchBudget()) return { skipped: "budget" };
+
+      researching = true;
+      recentResearch[key] = Date.now();
+
+      var first = rank(await fetchRelated(words, 40), words).slice(0, 25);
+      var added = mergeRows(first);
+
+      var second = [];
+      var more = relatedWords(first, words);
+      if (more.length && !overResearchBudget()) {
+        second = rank(await fetchRelated(more, 30), more).slice(0, 15);
+        added += mergeRows(second);
+      }
+
+      await saveBatch(first.concat(second), { daily: daily }); // the sync cursor is not touched
+      var result = { added: added, total: byId.size };
+      window.dispatchEvent(new CustomEvent("bukason-knowledge-researched", { detail: result }));
+      return result;
+    } catch (err) {
+      console.warn("BUKASON related search:", err);
+      return { error: err.message || "Related search failed" };
+    } finally {
+      researching = false;
+    }
+  }
+
   // ---------- public API ----------
 
   window.BukasonKnowledge = {
@@ -279,6 +405,7 @@
     lastSuccessAt: function () { return lastSuccessAt; },
     getEntries: function () { return Array.from(byId.values()); },
     isMetered: isMetered,
+    research: research,
     pending: pending,
 
     // The page tells us how to split text into words, so the index and the
